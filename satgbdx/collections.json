@@ -25,7 +25,7 @@
                 "c:name": "GeoEye-1",
                 "c:description": "GeoEye-1 satellite imagery",
                 "eo:platform": "GEOEYE01",
-                "eo:sensor": "GEOEYE01",
+                "eo:instrument": "GEOEYE01",
                 "provider": "Digital Globe",
                 "license": ""
             },
@@ -42,7 +42,7 @@
                 "c:name": "WorldView-1",
                 "c:description": "WorldView-1 satellite imagery",
                 "eo:platform": "WORLDVIEW01",
-                "eo:sensor": "WORLDVIEW01",
+                "eo:instrument": "WORLDVIEW01",
                 "provider": "Digital Globe",
                 "license": ""
             },
@@ -57,7 +57,7 @@
                 "c:name": "WorldView-2",
                 "c:description": "WorldView-2 satellite imagery",
                 "eo:platform": "WORLDVIEW02",
-                "eo:sensor": "WORLDVIEW02",
+                "eo:instrument": "WORLDVIEW02",
                 "provider": "Digital Globe",
                 "license": ""
             },
@@ -75,8 +75,8 @@
                 "c:id": "worldview-3",
                 "c:name": "WorldView-3",
                 "c:description": "WorldView-3 satellite imagery",
-                "eo:platform": "WORLDVIEW03_VNIR",
-                "eo:sensor": "WORLDVIEW03_VNIR",
+                "eo:platform": "WORLDVIEW03",
+                "eo:instrument": "WORLDVIEW03_VNIR",
                 "provider": "Digital Globe",
                 "license": ""
             },
@@ -85,6 +85,22 @@
                 "B2": {"common_name": "blue"},
                 "B3": {"common_name": "green"},
                 "B4": {"common_name": "red"},
+                "B5": {"common_name": ""}
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "c:id": "worldview-3-swir",
+                "c:name": "WorldView-3",
+                "c:description": "WorldView-3 satellite imagery",
+                "eo:platform": "WORLDVIEW03",
+                "eo:instrument": "WORLDVIEW03_SWIR",
+                "provider": "Digital Globe",
+                "license": ""
+            },
+            "eo:bands": {
+                "B1": {"common_name": ""},
                 "B5": {"common_name": ""}
             }
         }
