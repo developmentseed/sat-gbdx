@@ -1,0 +1,92 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "c:id": "quickbird-2",
+                "c:name": "QuickBird-2",
+                "c:description": "QuickBird-2 satellite imagery",
+                "eo:platform": "QUICKBIRD02",
+                "eo:instrument": "QUICKBIRD02",
+                "provider": "Digital Globe",
+                "license": ""
+            },
+            "eo:bands": {
+                "B1": {"common_name": "blue"},
+                "B2": {"common_name": "green"},
+                "B3": {"common_name": "red"}
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "c:id": "geoeye-1",
+                "c:name": "GeoEye-1",
+                "c:description": "GeoEye-1 satellite imagery",
+                "eo:platform": "GEOEYE01",
+                "eo:sensor": "GEOEYE01",
+                "provider": "Digital Globe",
+                "license": ""
+            },
+            "eo:bands": {
+                "B1": {"common_name": "blue"},
+                "B2": {"common_name": "green"},
+                "B3": {"common_name": "red"}
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "c:id": "worldview-1",
+                "c:name": "WorldView-1",
+                "c:description": "WorldView-1 satellite imagery",
+                "eo:platform": "WORLDVIEW01",
+                "eo:sensor": "WORLDVIEW01",
+                "provider": "Digital Globe",
+                "license": ""
+            },
+            "eo:bands": {
+                "B1": {"common_name": "pan"}
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "c:id": "worldview-2",
+                "c:name": "WorldView-2",
+                "c:description": "WorldView-2 satellite imagery",
+                "eo:platform": "WORLDVIEW02",
+                "eo:sensor": "WORLDVIEW02",
+                "provider": "Digital Globe",
+                "license": ""
+            },
+            "eo:bands": {
+                "B1": {"common_name": ""},
+                "B2": {"common_name": "blue"},
+                "B3": {"common_name": "green"},
+                "B4": {"common_name": ""},
+                "B5": {"common_name": "red"}
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "c:id": "worldview-3",
+                "c:name": "WorldView-3",
+                "c:description": "WorldView-3 satellite imagery",
+                "eo:platform": "WORLDVIEW03_VNIR",
+                "eo:sensor": "WORLDVIEW03_VNIR",
+                "provider": "Digital Globe",
+                "license": ""
+            },
+            "eo:bands": {
+                "B1": {"common_name": ""},
+                "B2": {"common_name": "blue"},
+                "B3": {"common_name": "green"},
+                "B4": {"common_name": "red"},
+                "B5": {"common_name": ""}
+            }
+        }
+    ]
+}
