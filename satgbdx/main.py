@@ -59,7 +59,11 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
 
     print('%s scenes found' % len(scenes))
 
-    # download thumbnail
+    # download files given keys
+    if download is not None:
+        for key in download:
+            scenes.download(key=key)
+    """
     if download:
         for scene in scenes:
             fout = scene.get_path(no_create=True) + '.jpg'
@@ -75,6 +79,7 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
                 f.write('0.0\n0.0\n')
                 f.write('%s\n' % (-(max(lats)-min(lats))/timg.ysize()))
                 f.write('%s\n%s\n' % (min(lons), max(lats)))
+    """
 
     if gettiles is not None:
         zoom = gettiles
@@ -118,7 +123,7 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
 
 
 def cli():
-    parser = satgbdx.GBDXParser.new(description='GBDX Search')
+    parser = satgbdx.GBDXParser.newbie(description='GBDX Search')
     args = parser.parse_args(sys.argv[1:])
 
     # enable logging

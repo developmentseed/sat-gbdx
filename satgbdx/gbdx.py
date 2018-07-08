@@ -12,6 +12,7 @@ from shapely.geometry import shape, Polygon
 from pygeotile.tile import Tile
 from satsearch.scene import Scene, Scenes
 from satsearch.parser import SatUtilsParser
+from satsearch.utils import dict_merge
 import satsearch.config as config
 from dateutil.parser import parse as dateparser
 import gippy
@@ -45,38 +46,32 @@ WORLDVIEW_8_BAND
 
 """
 
+def load_collections():
+    """ Load DG collections from included JSON file """
+    path = os.path.dirname(__file__)
+    with open(os.path.join(path, 'collections.json')) as f:
+        cols = json.loads(f.read())
+    return {c['properties']['c:id']:c for c in cols['features']}
+
+
+COLLECTIONS = load_collections()
+_COLLECTIONS = {c['properties']['eo:instrument']:c for c in COLLECTIONS.values()}
+
 
 class GBDXParser(SatUtilsParser):
 
     def __init__(self, *args, **kwargs):
         super(GBDXParser, self).__init__(*args, **kwargs)
         group = self.add_argument_group('GBDX parameters')
-        #group.add_argument('--download', help='Download thumbnails', action='store_true', default=False)
-        group.add_argument('--gettiles', help='Fetch tiles at this zoom level', default=None, type=int)
-        group.add_argument('--pansharp', help='Pan-sharpen fetched tiles, if able', default=False, action='store_true')
+        #group.add_argument('--gettiles', help='Fetch tiles at this zoom level', default=None)
+        #group.add_argument('--pansharp', help='Pan-sharpen fetched tiles, if able', default=False, action='store_true')
         group.add_argument('--order', action='store_true', default=False, help='Place order')
-        #group.add_argument('--datadir', help='Local directory to save images', default=config.DATADIR)
-        #group.add_argument('--subdirs', help='Save in subdirs based on these metadata keys', default="${date}_${satellite_name}_${scene_id}")
-        #group.add_argument('--filename', help='Save in subdirs based on these metadata keys', default="")
         group.add_argument('--types', nargs='*', default=['DigitalGlobeAcquisition'],
                            help='Data types ("DigitalGlobeAcquisition", "GBDXCatalogRecord", "IDAHOImage"')
-        group.add_argument('--overlap', help='Minimum overlap of footprint to AOI', default=0.98, type=float)
-
-    def parse_args(self, *args, **kwargs):
-        args = super(GBDXParser, self).parse_args(*args, **kwargs)
-        if 'intersects' in args:
-            args['geojson'] = args.pop('intersects')
-            geovec = gippy.GeoVector(args['geojson'])
-            args['searchAreaWkt'] = geovec[0].geometry()
-        if 'datetime' in args:
-            d1, d2 = args.pop('datetime').split('/')
-            args['startDate'] = '%sT00:00:00.00Z'
-        #if 'date_to' in args:
-        #    args['endDate'] = args.pop('date_to') + 'T23:59:59.59Z'
-        return args
+        group.add_argument('--overlap', help='Minimum %% overlap of footprint to AOI', default=None, type=int)
 
     @classmethod
-    def new(cls, *args, **kwargs):
+    def newbie(cls, *args, **kwargs):
         """ Return new parser """
         parser = cls(*args, **kwargs)
         parser.add_search_parser()
@@ -84,44 +79,43 @@ class GBDXParser(SatUtilsParser):
         return parser
 
 
-def load_collections():
-    """ Load DG collections from included JSON file """
-    path = os.path.dirname(__file__)
-    with open(os.path.join(path, 'collections.json')) as f:
-        cols = json.loads(f.read())
-    return cols
-
-
 def calculate_overlap(scenes, geometry):
     geom0 = shapely.wkt.loads(geometry)
     # calculate overlap
     for s in scenes:
-        geom = shapely.wkt.loads(s.geometry)
-        s.feature['properties']['overlap'] = geom.intersection(geom0).area / geom0.area
+        geom = shape(s.geometry)
+        s.feature['properties']['overlap'] = int(geom.intersection(geom0).area / geom0.area * 100)
     return scenes
 
 
 def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
-    """ Perform a GBDX query """
-    filters = []  # ["offNadirAngle < 20"]
-    # get scenes from search
-    if 'satellite_name' in kwargs:
-        filters.append("sensorPlatformName = '%s'" % kwargs.pop('satellite_name'))
-    if 'cloud_from' in kwargs:
-        filters.append("cloudCover >= %s" % kwargs.pop('cloud_from'))
-    if 'cloud_to' in kwargs:
-        filters.append("cloudCover <= %s" % kwargs.pop('cloud_to'))
-    #import pdb; pdb.set_trace()
+    """ Perform a GBDX query by converting from STAC terms to DG terms """
+    filters = []  # ["offNadirAngle < 20"
+    # build DG search parameters
+    if 'c:id' in kwargs:
+        _sensors = [COLLECTIONS[c]['properties']['eo:instrument'] for c in kwargs.pop('c:id')]
+        filters.append("sensorPlatformName = '%s'" % ','.join(_sensors))
+    if 'intersects' in kwargs:
+        geovec = gippy.GeoVector(kwargs.pop('intersects'))
+        kwargs['searchAreaWkt'] = geovec[0].geometry()
+    if 'datetime' in kwargs:
+        dt = kwargs.pop('datetime').split('/')
+        kwargs['startDate'] = dateparser(dt[0]).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        if len(dt) > 1:
+            kwargs['endDate'] = dateparser(dt[1]).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+    if 'eo:cloud_cover' in kwargs:
+        cc = kwargs.pop('eo:cloud_cover').split('/')
+        if len(cc) == 2:
+            filters.append("cloudCover >= %s" % cc[0])
+            filters.append("cloudCover <= %s" % cc[1])
+        else:
+            filters.append("cloudCover <= %s" % cc[0])
     results = gbdx.catalog.search(filters=filters, types=types, **kwargs)
-    if 'searchAreaWkt' in kwargs:
-        geom0 = shapely.wkt.loads(kwargs['searchAreaWkt'])
-    else:
-        geom0 = None
-
     scenes = Scenes([Scene(dg_to_stac(r['properties'])) for r in results])
+
     # calculate overlap
-    if False: #'searchAreaWkt' in kwargs and overlap is not None:
-        scenes = calculate_overlap(scenes, kwargs['searchAreaWkt'])
+    scenes = calculate_overlap(scenes, kwargs['searchAreaWkt'])
+    if overlap is not None: 
         scenes.scenes = list(filter(lambda x: x['overlap'] >= overlap, scenes.scenes))
 
     return scenes
@@ -132,8 +126,13 @@ def dg_to_stac(record):
     props = {
         'id': record['catalogID'],
         'datetime': record['timestamp'],
-        'eo:platform': record['platformName'],
-        'eo:instrument': record['sensorPlatformName'],
+        'eo:cloud_cover': record['cloudCover'],
+        'eo:gsd': record['multiResolution'],
+        'eo:sun_azimuth': record['sunAzimuth'],
+        'eo:sun_elevation': record['sunElevation'],
+        'eo:off_nadir': record['offNadirAngle'],
+        'eo:azimuth': record['targetAzimuth'],
+        'dg:image_bands': record['imageBands']
     }
     geom = shapely.wkt.loads(record['footprintWkt'])
     item = {
@@ -143,7 +142,7 @@ def dg_to_stac(record):
             'thumbnail': {'rel': 'thumbnail', 'href': record['browseURL']}
         }
     }
-    return item
+    return dict_merge(item, _COLLECTIONS[record['platformName']])
 
 
 def utm_epsg(latlon):
