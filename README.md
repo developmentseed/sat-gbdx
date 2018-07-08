@@ -1,6 +1,6 @@
 # gbdx-search
 
-GBDX search is a command line utility built on top of [sat-searc](https://github.com/sat-utils/sat-search). It allows for easy searching of the GBDX catalog API using gbdxtools, downloading of thumbnails, and ordering of data.
+GBDX search is a command line utility built on top of [sat-search](https://github.com/sat-utils/sat-search). It allows for easy searching of the GBDX catalog API using gbdxtools, downloading of thumbnails, and ordering of data.
 
 All of the options for saving search results, controlling save directories, and output options like calendars in sat-search are supported.
 
@@ -19,7 +19,23 @@ In GBDX the available satellite names are:
 	- IKONOS
 	- WORLDVIEW03_SWIR
 
+"""
+e.g.,
+./gbdx-search.py --intersects geojsonfile --printmd date scene_id satellite_name --clouds 0,10 --save ${gj%.*}
+/scenes-gbdx.geojson --date 2015-01-01,2017-11-01 --datadir ${gj%.*} --nosubdirs --download thumb
 
+Available satellite names
+{'GEOEYE01', 'WORLDVIEW03_VNIR', 'LANDSAT08', 'WORLDVIEW01', 'QUICKBIRD02', 'WORLDVIEW02', 'IKONOS', 'WORLDVIEW03_SWIR'}
+
+Available types
+{"DigitalGlobeAcquisition", "GBDXCatalogRecord", "IDAHOImage"}
+
+colorInterpretation
+BGRN
+PAN
+WORLDVIEW_8_BAND
+
+"""
 ```
 usage: gbdx-search.py [-h] [--satellite_name SATELLITE_NAME]
                       [--scene_id [SCENE_ID [SCENE_ID ...]]]

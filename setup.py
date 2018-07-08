@@ -17,8 +17,8 @@ dependency_links = [x.strip().replace('git+', '') for x in all_reqs if 'git+' no
 
 setup(
     name='satgbdx',
-    author='',
-    author_email='',
+    author='Matthew Hanson (matthewhanson)',
+    author_email='matt.a.hanson@gmmail.com',
     version=__version__,
     description='Library and CLI for searching and access GBDX imagery',
     url='https://github.com/developmentseed/sat-gbdx',
