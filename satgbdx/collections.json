@@ -16,6 +16,11 @@
                 "B1": {"common_name": "blue"},
                 "B2": {"common_name": "green"},
                 "B3": {"common_name": "red"}
+            },
+            "assets": {
+                "1": {"eo:bands": ["B1"]},
+                "2": {"eo:bands": ["B2"]},
+                "3": {"eo:bands": ["B3"]}
             }
         },
         {
@@ -33,6 +38,11 @@
                 "B1": {"common_name": "blue"},
                 "B2": {"common_name": "green"},
                 "B3": {"common_name": "red"}
+            },
+            "assets": {
+                "1": {"eo:bands": ["B1"]},
+                "2": {"eo:bands": ["B2"]},
+                "3": {"eo:bands": ["B3"]}
             }
         },
         {
@@ -48,6 +58,9 @@
             },
             "eo:bands": {
                 "B1": {"common_name": "pan"}
+            },
+            "assets": {
+                "1": {"eo:bands": ["B1"]}
             }
         },
         {
@@ -67,6 +80,13 @@
                 "B3": {"common_name": "green"},
                 "B4": {"common_name": ""},
                 "B5": {"common_name": "red"}
+            },
+            "assets": {
+                "1": {"eo:bands": ["B1"]},
+                "2": {"eo:bands": ["B2"]},
+                "3": {"eo:bands": ["B3"]},
+                "4": {"eo:bands": ["B4"]},
+                "5": {"eo:bands": ["B5"]}
             }
         },
         {
@@ -86,6 +106,13 @@
                 "B3": {"common_name": "green"},
                 "B4": {"common_name": "red"},
                 "B5": {"common_name": ""}
+            },
+            "assets": {
+                "1": {"eo:bands": ["B1"]},
+                "2": {"eo:bands": ["B2"]},
+                "3": {"eo:bands": ["B3"]},
+                "4": {"eo:bands": ["B4"]},
+                "5": {"eo:bands": ["B5"]}
             }
         },
         {
@@ -101,7 +128,14 @@
             },
             "eo:bands": {
                 "B1": {"common_name": ""},
-                "B5": {"common_name": ""}
+                "B2": {"common_name": ""}
+            },
+            "assets": {
+                "1": {"eo:bands": ["B1"]},
+                "2": {"eo:bands": ["B2"]},
+                "3": {"eo:bands": ["B3"]},
+                "4": {"eo:bands": ["B4"]},
+                "5": {"eo:bands": ["B5"]}
             }
         }
     ]
