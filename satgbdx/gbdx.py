@@ -49,27 +49,101 @@ WORLDVIEW_8_BAND
 class GBDXParser(SatUtilsParser):
 
     def __init__(self, *args, **kwargs):
-        super(GBDXParser, self).__init__(*args, save=False, download=False, output=True, **kwargs)
+        super(GBDXParser, self).__init__(*args, **kwargs)
         group = self.add_argument_group('GBDX parameters')
-        # search
-        #group.add_argument('--types', nargs='*', default=['DigitalGlobeAcquisition'],
-        #                   help='Data types ("DigitalGlobeAcquisition", "GBDXCatalogRecord", "IDAHOImage"')
-        #group.add_argument('--overlap', help='Minimum overlap of footprint to AOI', default=1.0, type=float)
+        #group.add_argument('--download', help='Download thumbnails', action='store_true', default=False)
+        group.add_argument('--gettiles', help='Fetch tiles at this zoom level', default=None, type=int)
+        group.add_argument('--pansharp', help='Pan-sharpen fetched tiles, if able', default=False, action='store_true')
+        group.add_argument('--order', action='store_true', default=False, help='Place order')
+        #group.add_argument('--datadir', help='Local directory to save images', default=config.DATADIR)
+        #group.add_argument('--subdirs', help='Save in subdirs based on these metadata keys', default="${date}_${satellite_name}_${scene_id}")
+        #group.add_argument('--filename', help='Save in subdirs based on these metadata keys', default="")
+        group.add_argument('--types', nargs='*', default=['DigitalGlobeAcquisition'],
+                           help='Data types ("DigitalGlobeAcquisition", "GBDXCatalogRecord", "IDAHOImage"')
+        group.add_argument('--overlap', help='Minimum overlap of footprint to AOI', default=0.98, type=float)
 
-        group.add_argument('--load', help='Load search results from file', required=True)
+    def parse_args(self, *args, **kwargs):
+        args = super(GBDXParser, self).parse_args(*args, **kwargs)
+        if 'intersects' in args:
+            args['geojson'] = args.pop('intersects')
+            geovec = gippy.GeoVector(args['geojson'])
+            args['searchAreaWkt'] = geovec[0].geometry()
+        if 'datetime' in args:
+            d1, d2 = args.pop('datetime').split('/')
+            args['startDate'] = '%sT00:00:00.00Z'
+        #if 'date_to' in args:
+        #    args['endDate'] = args.pop('date_to') + 'T23:59:59.59Z'
+        return args
 
-        # downloading
-        group.add_argument('--datadir', help='Local directory to save images', default=config.DATADIR)
-        group.add_argument('--subdirs', help='Save in subdirs based on these metadata keys', default="")
-        group.add_argument('--filename', default="${date}_${satellite_name}_${scene_id}",
-                           help='Save files with this filename pattern based on metadata keys')
-        group.add_argument('--download', help='Download geotiffs', action='store_true', default=False)
+    @classmethod
+    def new(cls, *args, **kwargs):
+        """ Return new parser """
+        parser = cls(*args, **kwargs)
+        parser.add_search_parser()
+        parser.add_load_parser()
+        return parser
 
-        #group = self.add_argument_group('IDAHO Tiles')
-        #group.add_argument('--gettiles', help='Fetch tiles at this zoom level', default=None, type=int)
-        group.add_argument('--nocrop', help='Do not crop to AOI', default=False, action='store_true')
-        group.add_argument('--pansharp', help='Pan-sharpen fetched images, if able', default=False, action='store_true')
-        group.add_argument('--carcount', help='Pan-sharpen fetched images, if able', default=False, action='store_true')
+
+def load_collections():
+    """ Load DG collections from included JSON file """
+    path = os.path.dirname(__file__)
+    with open(os.path.join(path, 'collections.json')) as f:
+        cols = json.loads(f.read())
+    return cols
+
+
+def calculate_overlap(scenes, geometry):
+    geom0 = shapely.wkt.loads(geometry)
+    # calculate overlap
+    for s in scenes:
+        geom = shapely.wkt.loads(s.geometry)
+        s.feature['properties']['overlap'] = geom.intersection(geom0).area / geom0.area
+    return scenes
+
+
+def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
+    """ Perform a GBDX query """
+    filters = []  # ["offNadirAngle < 20"]
+    # get scenes from search
+    if 'satellite_name' in kwargs:
+        filters.append("sensorPlatformName = '%s'" % kwargs.pop('satellite_name'))
+    if 'cloud_from' in kwargs:
+        filters.append("cloudCover >= %s" % kwargs.pop('cloud_from'))
+    if 'cloud_to' in kwargs:
+        filters.append("cloudCover <= %s" % kwargs.pop('cloud_to'))
+    #import pdb; pdb.set_trace()
+    results = gbdx.catalog.search(filters=filters, types=types, **kwargs)
+    if 'searchAreaWkt' in kwargs:
+        geom0 = shapely.wkt.loads(kwargs['searchAreaWkt'])
+    else:
+        geom0 = None
+
+    scenes = Scenes([Scene(dg_to_stac(r['properties'])) for r in results])
+    # calculate overlap
+    if False: #'searchAreaWkt' in kwargs and overlap is not None:
+        scenes = calculate_overlap(scenes, kwargs['searchAreaWkt'])
+        scenes.scenes = list(filter(lambda x: x['overlap'] >= overlap, scenes.scenes))
+
+    return scenes
+
+
+def dg_to_stac(record):
+    """ Transforms a DG record into a STAC item """
+    props = {
+        'id': record['catalogID'],
+        'datetime': record['timestamp'],
+        'eo:platform': record['platformName'],
+        'eo:instrument': record['sensorPlatformName'],
+    }
+    geom = shapely.wkt.loads(record['footprintWkt'])
+    item = {
+        'properties': props,
+        'geometry': geoj.Feature(geometry=geom)['geometry'],
+        'assets': {
+            'thumbnail': {'rel': 'thumbnail', 'href': record['browseURL']}
+        }
+    }
+    return item
 
 
 def utm_epsg(latlon):
@@ -125,95 +199,49 @@ def download_scenes(scenes, nocrop=False, pansharp=False):
     return fouts
 
 
-def car_count(scene, bbox=None, pansharp=False):
-    """ Run workflow """
-    # workflows
-    if 'location' not in scene.metadata:
-        return None
-
-    alg = 'deepcore-singleshot'
-    suffix = '_%s' % alg
-    suffix = suffix if pansharp is False else '_pansharp' + suffix
-    outdir = os.path.join('sez', scene.get_filename(suffix=suffix))
-
-    data = scene.metadata['location']
-    if bbox is not None:
-        task_crop = gbdx.Task('CropGeotiff', data=data, wkt=shape(bbox).wkt)
-        data = task_crop.outputs.data
-        workflow = [task_crop]
-    else:
-        workflow = []
-
-    task_proc = gbdx.Task('AOP_Strip_Processor', data=data,
-                          bands='MS', enable_dra=False, enable_acomp=True,
-                          enable_pansharpen=pansharp, ortho_epsg='UTM')
-    workflow.append(task_proc)
-
-    task_alg = gbdx.Task(alg, data=task_proc.outputs.data.value)
-    workflow.append(task_alg)
-
-    workflow = gbdx.Workflow(workflow)
-    if bbox is not None:
-        workflow.savedata(task_crop.outputs.data, location=outdir)
-    #workflow.savedata(task_proc.outputs.data.value, location=outdir)
-    workflow.savedata(task_alg.outputs.data, location=outdir)
-    workflow.execute()
-    workflow.status
-    print(workflow.id, workflow.status)
-
-    scene.metadata['workflows'] = scene.metadata.get('workflows', []).append(workflow.id)
-
-    return workflow.id
+def deg2num(lat_deg, lon_deg, zoom):
+    lat_rad = math.radians(lat_deg)
+    n = 2.0 ** zoom
+    xtile = int((lon_deg + 180.0)/360.0*n)
+    ytile = int((1.0 - math.log(math.tan(lat_rad)+(1/math.cos(lat_rad)))/math.pi)/2.0*n)
+    return (xtile, ytile)
 
 
-def main(load=None, download=None, printsearch=False, printmd=None, printcal=False, review=False,
-         nocrop=False, pansharp=False, carcount=False, **kwargs):
-    """ Create/run GBDX workflow """
-    scenes = Scenes.load(load)
+def get_tiles(scene, aoi, zoom, path='', pansharp=False):
+    with open(aoi) as f:
+        geom = json.loads(f.read())['geometry']
+    lats = [c[1] for c in geom['coordinates'][0]]
+    lons = [c[0] for c in geom['coordinates'][0]]
+    xmin, ymin = deg2num(max(lats), min(lons), zoom)
+    xmax, ymax = deg2num(min(lats), max(lons), zoom)
+    xtiles = range(xmin, xmax+1)
+    ytiles = range(ymin, ymax+1)
+    tiles = []
+    url0 = 'https://idaho.geobigdata.io/v1/tile/%s/%s/%s' % (scene.metadata['bucketName'], scene.scene_id, zoom)
+    tile_coords = []
+    for x in xtiles:
+        for y in ytiles:
+            tile = Tile.from_google(google_x=x, google_y=y, zoom=zoom)
+            p1 = tile.bounds[0]
+            p2 = tile.bounds[1]
+            pts = [[p1[1], p1[0]], [p2[1], p1[0]], [p2[1], p2[0]], [p1[1], p2[0]]]
+            geom0 = Polygon(pts)
+            area = shape(geom).intersection(geom0).area
+            if area > 0.0:
+                tile_coords.append((x, y))
+    print('%s total tiles' % (len(tile_coords)))
+    tiles = []
+    for x, y in tile_coords:
+        url = os.path.join(url0, '%s/%s?token=%s') % (x, y, os.environ.get('GBDX_TOKEN'))
+        if pansharp and 'PAN_SCENEID' in scene.metadata:
+            config.subdirs = config.subdirs + '_pansharp'
+            url = url + '&panId=%s' % scene.metadata['PAN_SCENEID']
+        path = scene.get_path()
+        fout = '%s-%s-%s.png' % (zoom, x, y)
+        fout = os.path.join(path, fout)
+        if not os.path.exists(fout):
+            scene.download_file(url, fout=fout)
+        tiles.append(fout)
+    print('downloaded tiles')
+    return tiles
 
-    # move to sat-search
-    for key, value in kwargs.items():
-        scenes.filter(key, value)
-
-    # print summary
-    if printmd is not None:
-        scenes.print_scenes(printmd)
-    # print calendar
-    if printcal:
-        print(scenes.text_calendar())
-    print('%s scenes found' % len(scenes))
-
-    #if order:
-    #    order_scenes(scenes)
-
-    if download:
-        order_scenes(scenes)
-        fouts = download_scenes(scenes, nocrop=nocrop, pansharp=pansharp)
-
-    if carcount:
-        for scene in scenes[1:]:
-            wid = car_count(scene, pansharp=pansharp) #, bbox=scenes.metadata['aoi'])
-            wf = scene.metadata.get('workflows')
-            wf = [] if wf is None else wf
-            print('Workflow ID', wid)
-            scene.metadata['workflows'] = wf + [wid]
-            #[car_count(scene, bbox=scenes.bbox()) for scene in scenes]
-    # save new metadata back to loaded file
-    scenes.save(filename=load)
-
-    return scenes
-
-
-def cli():
-    parser = GBDXParser(description='GBDX Search')
-    args = parser.parse_args(sys.argv[1:])
-
-    # enable logging
-    logging.basicConfig(stream=sys.stdout, level=args.pop('verbosity') * 10)
-
-    scenes = main(**args)
-    return len(scenes)
-
-
-if __name__ == "__main__":
-    cli()
