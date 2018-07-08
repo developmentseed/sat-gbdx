@@ -22,38 +22,19 @@ logger = logging.getLogger(__name__)
 gbdx = Interface()
 
 
-"""
-e.g.,
-./gbdx-search.py --intersects geojsonfile --printmd date scene_id satellite_name --clouds 0,10 --save ${gj%.*}
-/scenes-gbdx.geojson --date 2015-01-01,2017-11-01 --datadir ${gj%.*} --nosubdirs --download thumb
-
-
-Available satellite names
-{'GEOEYE01', 'WORLDVIEW03_VNIR', 'LANDSAT08', 'WORLDVIEW01', 'QUICKBIRD02', 'WORLDVIEW02', 'IKONOS', 'WORLDVIEW03_SWIR'}
-
-Available types
-{"DigitalGlobeAcquisition", "GBDXCatalogRecord", "IDAHOImage"}
-
-colorInterpretation
-BGRN
-PAN
-WORLDVIEW_8_BAND
-
-"""
-
 
 class GBDXParser(SatUtilsParser):
 
     def __init__(self, *args, **kwargs):
-        super(GBDXParser, self).__init__(*args, download=False, **kwargs)
+        super(GBDXParser, self).__init__(*args, **kwargs)
         group = self.add_argument_group('GBDX parameters')
-        group.add_argument('--download', help='Download thumbnails', action='store_true', default=False)
+        #group.add_argument('--download', help='Download thumbnails', action='store_true', default=False)
         group.add_argument('--gettiles', help='Fetch tiles at this zoom level', default=None, type=int)
         group.add_argument('--pansharp', help='Pan-sharpen fetched tiles, if able', default=False, action='store_true')
         group.add_argument('--order', action='store_true', default=False, help='Place order')
-        group.add_argument('--datadir', help='Local directory to save images', default=config.DATADIR)
-        group.add_argument('--subdirs', help='Save in subdirs based on these metadata keys', default="${date}_${satellite_name}_${scene_id}")
-        group.add_argument('--filename', help='Save in subdirs based on these metadata keys', default="")
+        #group.add_argument('--datadir', help='Local directory to save images', default=config.DATADIR)
+        #group.add_argument('--subdirs', help='Save in subdirs based on these metadata keys', default="${date}_${satellite_name}_${scene_id}")
+        #group.add_argument('--filename', help='Save in subdirs based on these metadata keys', default="")
         group.add_argument('--types', nargs='*', default=['DigitalGlobeAcquisition'],
                            help='Data types ("DigitalGlobeAcquisition", "GBDXCatalogRecord", "IDAHOImage"')
         group.add_argument('--overlap', help='Minimum overlap of footprint to AOI', default=0.98, type=float)
@@ -64,12 +45,20 @@ class GBDXParser(SatUtilsParser):
             args['geojson'] = args.pop('intersects')
             geovec = gippy.GeoVector(args['geojson'])
             args['searchAreaWkt'] = geovec[0].geometry()
-        if 'date_from' in args:
-            args['startDate'] = args.pop('date_from') + 'T00:00:00.00Z'
-        if 'date_to' in args:
-            args['endDate'] = args.pop('date_to') + 'T23:59:59.59Z'
-        config.SUBSUBDIRS = True
+        if 'datetime' in args:
+            d1, d2 = args.pop('datetime').split('/')
+            args['startDate'] = '%sT00:00:00.00Z'
+        #if 'date_to' in args:
+        #    args['endDate'] = args.pop('date_to') + 'T23:59:59.59Z'
         return args
+
+    @classmethod
+    def new(cls, *args, **kwargs):
+        """ Return new parser """
+        parser = cls(*args, **kwargs)
+        parser.add_search_parser()
+        parser.add_load_parser()
+        return parser
 
 
 def deg2num(lat_deg, lon_deg, zoom):
@@ -138,7 +127,35 @@ def open_tile(filename):
     return geoimg
 
 
-def query(types=['DigitalGlobeAcquisition'], overlap=0.98, **kwargs):
+def transform(record):
+    """ Transforms a DG record into a STAC item """
+    props = {
+        'id': record['catalogID'],
+        'datetime': record['timestamp'],
+        'eo:platform': record['platformName'],
+        'eo:instrument': record['sensorPlatformName'],
+    }
+    geom = shapely.wkt.loads(record['footprintWkt'])
+    item = {
+        'properties': props,
+        'geometry': geoj.Feature(geometry=geom)['geometry'],
+        'assets': {
+            'thumbnail': {'rel': 'thumbnail', 'href': record['browseURL']}
+        }
+    }
+    return item
+
+
+def calculate_overlap(scenes, geometry):
+    geom0 = shapely.wkt.loads(geometry)
+    # calculate overlap
+    for s in scenes:
+        geom = shapely.wkt.loads(s.geometry)
+        s.feature['properties']['overlap'] = geom.intersection(geom0).area / geom0.area
+    return scenes
+
+
+def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
     """ Perform a GBDX query """
     filters = []  # ["offNadirAngle < 20"]
     # get scenes from search
@@ -148,70 +165,55 @@ def query(types=['DigitalGlobeAcquisition'], overlap=0.98, **kwargs):
         filters.append("cloudCover >= %s" % kwargs.pop('cloud_from'))
     if 'cloud_to' in kwargs:
         filters.append("cloudCover <= %s" % kwargs.pop('cloud_to'))
-
+    #import pdb; pdb.set_trace()
     results = gbdx.catalog.search(filters=filters, types=types, **kwargs)
     if 'searchAreaWkt' in kwargs:
         geom0 = shapely.wkt.loads(kwargs['searchAreaWkt'])
     else:
         geom0 = None
-    scns = []
-    for result in results:
-        result['scene_id'] = result['identifier']
-        result['date'] = result['properties']['timestamp'][0:10]
-        result['satellite_name'] = result['properties']['sensorPlatformName']
-        geom = shapely.wkt.loads(result['properties']['footprintWkt'])
-        geometry = geoj.Feature(geometry=geom)['geometry']
-        if 'browseURL' in result['properties']:
-            result['thumbnail'] = result['properties']['browseURL']
-        else:
-            result['thumbnail'] = ''
-        result['download_links'] = {'': []}
-        result.update(result.pop('properties'))
-        # calculate overlap
-        if geom0 is not None:
-            result['overlap'] = geom.intersection(geom0).area / geom0.area
-        if result.get('overlap', 1.0) >= overlap:
-            feature = {'geometry': geometry, 'properties': result}
-            scns.append(Scene(feature, source=''))
-    aoi = {'type': 'Polygon', 'coordinates': [list(geom0.exterior.coords)]}
-    scenes = Scenes(scns, metadata={'aoi': aoi})
+
+    scenes = Scenes([Scene(transform(r['properties'])) for r in results])
+    # calculate overlap
+    if False: #'searchAreaWkt' in kwargs and overlap is not None:
+        scenes = calculate_overlap(scenes, kwargs['searchAreaWkt'])
+        scenes.scenes = list(filter(lambda x: x['overlap'] >= overlap, scenes.scenes))
+
     return scenes
 
 
-def main(review=False, printsearch=False, printmd=None, printcal=False,
-         load=None, save=None, append=False, download=None, order=False, gettiles=None, geojson=None,
-         pansharp=False, **kwargs):
+def main(scenes=None, review=False, print_md=None, print_cal=False,
+         save=None, append=False, download=None, 
+         order=False, gettiles=None, geojson=None, pansharp=False, **kwargs):
 
-    if load is None:
-        if printsearch:
-            txt = 'Search for scenes matching criteria:\n'
-            for kw in kwargs:
-                txt += ('{:>20}: {:<40}\n'.format(kw, kwargs[kw]))
-            print(txt)
-
+    if scenes is None:
         scenes = query(**kwargs)
-
     else:
-        scenes = Scenes.load(load)
+        scenes = Scenes.load(scenes)
         # hack
-        for s in scenes.scenes:
-            s.source = ''
-        if 'scene_id' in kwargs:
-            scenes.filter('scene_id', kwargs.pop('scene_id'))
-        if 'satellite_name' in kwargs:
-            scenes.filter('satellite_name', kwargs.pop('satellite_name'))
+        #for s in scenes.scenes:
+        #    s.source = ''
+        #if 'scene_id' in kwargs:
+        #    scenes.filter('scene_id', kwargs.pop('scene_id'))
+        #if 'satellite_name' in kwargs:
+        #    scenes.filter('satellite_name', kwargs.pop('satellite_name'))
 
-    # output options
     if review:
         if not os.getenv('IMGCAT', None):
             raise ValueError('Set IMGCAT envvar to terminal image display program to use review feature')
         scenes.review_thumbnails()
-    # print summary
-    if printmd is not None:
-        scenes.print_scenes(printmd)
+
+    # print metadata
+    if print_md is not None:
+        scenes.print_scenes(print_md)
+
     # print calendar
-    if printcal:
+    if print_cal:
         print(scenes.text_calendar())
+
+    # save all metadata in JSON file
+    if save is not None:
+        scenes.save(filename=save, append=append)
+
     print('%s scenes found' % len(scenes))
 
     # download thumbnail
@@ -269,14 +271,15 @@ def main(review=False, printsearch=False, printmd=None, printcal=False,
 
 
 def cli():
-    parser = GBDXParser(description='GBDX Search')
+    parser = GBDXParser.new(description='GBDX Search')
     args = parser.parse_args(sys.argv[1:])
 
     # enable logging
-    logging.basicConfig(stream=sys.stdout, level=args.pop('verbosity') * 10)
+    #logging.basicConfig(stream=sys.stdout, level=args.pop('verbosity') * 10)
 
-    scenes = main(**args)
-    return len(scenes)
+    cmd = args.pop('command', None)
+    if cmd is not None:
+        return main(**args)
 
 
 if __name__ == "__main__":
