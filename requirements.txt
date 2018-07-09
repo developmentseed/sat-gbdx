@@ -4,4 +4,4 @@ gbdxtools~=0.15.6
 pygeotile~=1.0.0
 utm~=0.4.2
 dateutils~=0.6.6
-satsearch~=1.0.0b5
+satsearch~=1.0.0b6
