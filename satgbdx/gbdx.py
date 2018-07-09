@@ -183,24 +183,17 @@ def utm_epsg(latlon):
     return ('EPSG:327' if latlon[0] < 0 else 'EPSG:326') + str(zone[2])
 
 
-def order(scene, pansharp=False):
+def order(scene):
     """ Order this scene """
     if 'dg:order_id' not in scene.keys():
         scene.feature['properties']['dg:order_id'] = gbdx.ordering.order(scene['id'])
     sid = scene.feature['properties']['dg:order_id']
     status = gbdx.ordering.status(sid)[0]
-    key = 'ordered_pansharp' if pansharp else 'ordered'
     if status['location'] != 'not_delivered':
-        scene['assets'][key] = {'href': status['location']}
+        scene['assets']['full'] = {'href': status['location']}
     #scene.feature['properties']['location'] = status['location']
-    print('%s\t%s\t%s\t%s' % (sid, status['acquisition_id'], status['state'], status['location']))
+    print('Order status for %s: %s, %s' % (status['acquisition_id'], status['state'], status['location']))
     return scene
-
-
-def order_scenes(scenes, pansharp=False):
-    """ Order this scene """
-    [order(s, pansharp=pansharp) for s in scenes]
-    return scenes
 
 
 def download_scenes(scenes, pansharp=False):
@@ -212,11 +205,11 @@ def download_scenes(scenes, pansharp=False):
     geovec = gippy.GeoVector(aoiname)
     fouts = []
     dirout = tempfile.mkdtemp()
-    key = 'ordered_pansharp' if pansharp else 'ordered'
     # TODO - wrap this in a try-except-finally to ensure removal of files
     for scene in scenes:
-        order(scene, pansharp=pansharp)
-        if key in scene.assets:
+        order(scene)
+        if 'full' in scene.assets:
+            import pdb; pdb.set_trace()
             #dt = dateparser(scene.metadata['timestamp'])
             #bname = '%s_%s' % (dt.strftime('%Y-%m-%d_%H-%M-%S'), scene.metadata['satellite_name'])
             ps = '_pansharp' if pansharp else ''

@@ -53,11 +53,7 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
         print(scenes.text_calendar())
 
     if order:
-        scenes = satgbdx.order_scenes(scenes, pansharp=pansharp)
-        #for scene in scenes:
-        #    scene.metadata['order_id'] = 'test'  # gbdx.ordering.order(scene.scene_id)
-        #    status = gbdx.ordering.status(scene.metadata['order_id'])[0]
-        #    print('%s\t%s\t%s\t%s' % (scene.metadata['order_id'], status['acquisition_id'], status['state'], status['location']))
+        scenes = [satgbdx.order(s) for s in scenes]
 
     # save all metadata in JSON file
     if save is not None:
@@ -70,7 +66,11 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
         if 'thumbnail' in download:
             scenes.download(key='thumbnail')
             download.remove('thumbnail')
+        if 'full' in download:
+            satgbdx.download_scenes(scenes)
+            download.remove('full')
         if len(download) > 0:
+            logger.warning('Download keys not recognized (%s)' % ','.join(download))
             satgbdx.download_scenes(scenes)
         #for key in download:
         #    scenes.download(key=key)
