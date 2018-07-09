@@ -59,7 +59,7 @@ class GBDXParser(SatUtilsParser):
         #parser.download_group.add_argument('--order', action='store_true', default=False, help='Place order for these scenes')
         #group.add_argument('--types', nargs='*', default=['DigitalGlobeAcquisition'],
         #                   help='Data types ("DigitalGlobeAcquisition", "GBDXCatalogRecord", "IDAHOImage"')
-        parser.search_group.add_argument('--overlap', help='Minimum %% overlap of footprint to AOI', default=None, type=int)        
+        parser.search_group.add_argument('--overlap', help='Minimum %% overlap of footprint to AOI', default=1, type=int)        
         return parser
 
 
@@ -114,8 +114,8 @@ class GBDXScene(Scene):
                     'AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0],' + \
                     'UNIT["degree",0.0174532925199433],AUTHORITY["EPSG","4326"]]'
         
-            with open(fname+'.aux.xml', 'w') as f:
-                f.write('<PAMDataset><SRS>PROJCS%s</SRS></PAMDataset>' % srs)
+            #with open(fname+'.aux.xml', 'w') as f:
+            #    f.write('<PAMDataset><SRS>PROJCS%s</SRS></PAMDataset>' % srs)
             #geoimg = None
             # convert to GeoTiff
             #geoimg = gippy.GeoImage(fname)
