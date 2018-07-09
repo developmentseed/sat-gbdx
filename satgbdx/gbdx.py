@@ -47,16 +47,20 @@ class GBDXParser(SatUtilsParser):
         config.DATADIR = os.getenv('SATUTILS_DATADIR', './')
         # filename pattern for saving files
         config.FILENAME = os.getenv('SATUTILS_FILENAME', '${date}_${c:id}_${id}')
-
         super(GBDXParser, self).__init__(*args, **kwargs)
-        group = self.add_argument_group('GBDX parameters')
-        #group.add_argument('--gettiles', help='Fetch tiles at this zoom level', default=None)
-        #group.add_argument('--pansharp', help='Pan-sharpen fetched tiles, if able', default=False, action='store_true')
+        self.download_group.add_argument('--pansharp', help='Pan-sharpen fetched tiles, if able', default=False, action='store_true')
         self.download_group.add_argument('--order', action='store_true', default=False, help='Place order for these scenes')
+
+    @classmethod
+    def newbie(cls, *args, **kwargs):
+        parser = super().newbie(*args, **kwargs)
+        #parser.download_group.add_argument('--gettiles', help='Fetch tiles at this zoom level', default=None)
+        
+        #parser.download_group.add_argument('--order', action='store_true', default=False, help='Place order for these scenes')
         #group.add_argument('--types', nargs='*', default=['DigitalGlobeAcquisition'],
         #                   help='Data types ("DigitalGlobeAcquisition", "GBDXCatalogRecord", "IDAHOImage"')
-        self.output_group.add_argument('--overlap', help='Minimum %% overlap of footprint to AOI', default=None, type=int)
-
+        parser.search_group.add_argument('--overlap', help='Minimum %% overlap of footprint to AOI', default=None, type=int)        
+        return parser
 
 
 class GBDXScene(Scene):
