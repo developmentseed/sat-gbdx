@@ -7,14 +7,14 @@ services:
       context: .
     image: 'developmentseed/sat-gbdx:latest'
     entrypoint: /bin/bash
-    env_file: .env
+    #env_file: .env
     volumes:
       - '.:/home/geolambda/work'
 
   test:
     image: 'developmentseed/sat-gbdx:latest'
     entrypoint: bash -c 'pytest test/'
-    env_file: .env
+    #env_file: .env
     volumes:
       - './lambda:/home/geolambda/lambda'
       - './test:/home/geolambda/test'
