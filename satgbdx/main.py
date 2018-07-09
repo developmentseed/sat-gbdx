@@ -28,16 +28,12 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
          order=False, gettiles=None, geojson=None, pansharp=False, **kwargs):
 
     if scenes is None:
+        # ensure we update the results file every time (could have ordering information)
+        if save is None:
+            save = scenes
         scenes = satgbdx.GBDXScenes(satgbdx.query(**kwargs), properties=kwargs)
     else:
         scenes = satgbdx.GBDXScenes.load(scenes)
-        # hack
-        #for s in scenes.scenes:
-        #    s.source = ''
-        #if 'scene_id' in kwargs:
-        #    scenes.filter('scene_id', kwargs.pop('scene_id'))
-        #if 'satellite_name' in kwargs:
-        #    scenes.filter('satellite_name', kwargs.pop('satellite_name'))
 
     if review:
         if not os.getenv('IMGCAT', None):
@@ -54,10 +50,6 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
 
     if order:
         scenes = [satgbdx.order(s) for s in scenes]
-
-    # save all metadata in JSON file
-    if save is not None:
-        scenes.save(filename=save, append=append)
 
     print('%s scenes found' % len(scenes))
 
@@ -91,6 +83,10 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
                 f.write('%s\n' % (-(max(lats)-min(lats))/timg.ysize()))
                 f.write('%s\n%s\n' % (min(lons), max(lats)))
     """
+
+    # save all metadata in JSON file
+    if save is not None:
+        scenes.save(filename=save, append=append)
 
     if gettiles is not None:
         zoom = gettiles
