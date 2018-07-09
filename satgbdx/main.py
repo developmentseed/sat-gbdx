@@ -15,7 +15,6 @@ from satsearch.parser import SatUtilsParser
 import satsearch.config as config
 import gippy
 import gippy.algorithms as alg
-from pdb import set_trace
 
 import satgbdx
 import satgbdx.utils as utils
@@ -95,7 +94,6 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
     if gettiles is not None:
         zoom = gettiles
         # find matching MS/PAN scenes
-        #set_trace()
         pan_scenes = [scene for scene in scenes if scene.metadata['colorInterpretation'] == 'PAN']
         other_scenes = [scene for scene in scenes if scene.metadata['colorInterpretation'] != 'PAN']
         for scene in pan_scenes:

@@ -21,7 +21,6 @@ import gippy.algorithms as alg
 from gbdxtools import Interface
 from gbdxtools import CatalogImage
 import utm
-from pdb import set_trace
 
 logger = logging.getLogger(__name__)
 logging.getLogger('requests').setLevel(logging.CRITICAL)
@@ -53,6 +52,35 @@ class GBDXParser(SatUtilsParser):
         self.output_group.add_argument('--overlap', help='Minimum %% overlap of footprint to AOI', default=None, type=int)
 
 
+
+class GBDXScene(Scene):
+    """ A GBDX scene """
+
+    def __init__(self, feature):
+        """ Transforms a DG record into a STAC item """
+        props = {
+            'id': feature['catalogID'],
+            'datetime': feature['timestamp'],
+            'eo:cloud_cover': feature['cloudCover'],
+            'eo:gsd': feature['multiResolution'],
+            'eo:sun_azimuth': feature['sunAzimuth'],
+            'eo:sun_elevation': feature['sunElevation'],
+            'eo:off_nadir': feature['offNadirAngle'],
+            'eo:azimuth': feature['targetAzimuth'],
+            'dg:image_bands': feature['imageBands']
+        }
+        geom = shapely.wkt.loads(feature['footprintWkt'])
+        item = {
+            'properties': props,
+            'geometry': geoj.Feature(geometry=geom)['geometry'],
+            'assets': {
+                'thumbnail': {'rel': 'thumbnail', 'href': feature['browseURL']}
+            }
+        }
+        feature = dict_merge(item, _COLLECTIONS[feature['platformName']])
+        super(GBDXParser, self).__init__(feature)
+
+
 def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
     """ Perform a GBDX query by converting from STAC terms to DG terms """
     filters = []  # ["offNadirAngle < 20"
@@ -78,7 +106,7 @@ def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
     results = gbdx.catalog.search(filters=filters, types=types, **kwargs)
     with open('results.json', 'w') as f:
         f.write(json.dumps(results))
-    scenes = [Scene(dg_to_stac(r['properties'])) for r in results]
+    scenes = [GBDXScene(r['properties']) for r in results]
 
     # calculate overlap
     scenes = calculate_overlap(scenes, kwargs['searchAreaWkt'])
@@ -86,30 +114,6 @@ def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
         scenes = list(filter(lambda x: x['overlap'] >= overlap, scenes))
 
     return scenes
-
-
-def dg_to_stac(record):
-    """ Transforms a DG record into a STAC item """
-    props = {
-        'id': record['catalogID'],
-        'datetime': record['timestamp'],
-        'eo:cloud_cover': record['cloudCover'],
-        'eo:gsd': record['multiResolution'],
-        'eo:sun_azimuth': record['sunAzimuth'],
-        'eo:sun_elevation': record['sunElevation'],
-        'eo:off_nadir': record['offNadirAngle'],
-        'eo:azimuth': record['targetAzimuth'],
-        'dg:image_bands': record['imageBands']
-    }
-    geom = shapely.wkt.loads(record['footprintWkt'])
-    item = {
-        'properties': props,
-        'geometry': geoj.Feature(geometry=geom)['geometry'],
-        'assets': {
-            'thumbnail': {'rel': 'thumbnail', 'href': record['browseURL']}
-        }
-    }
-    return dict_merge(item, _COLLECTIONS[record['platformName']])
 
 
 def calculate_overlap(scenes, geometry):
@@ -166,7 +170,6 @@ def download_scenes(scenes, pansharp=False):
             fout = os.path.join(scene.get_path(), scene.get_filename(suffix=ps)) + '.tif'
             try:
                 # TODO - allow for other projections
-                import pdb; pdb.set_trace()
                 img = CatalogImage(scene['id'], pansharpen=pansharp, bbox=scenes.bbox(), proj=utm_epsg(scenes.center()))
                 if not os.path.exists(fout):
                     tif = img.geotiff(path=fout)
