@@ -4,5 +4,6 @@ gbdxtools~=0.15.6
 pygeotile~=1.0.0
 utm~=0.4.2
 dateutils~=0.6.6
-satsearch~=1.0.0b7
-rasterio==0.36.0
+satsearch~=1.0.0b8
+rasterio==1.0rc4
+requests[security]~=2.19.1
