@@ -42,6 +42,12 @@ _COLLECTIONS = {c['properties']['eo:instrument']:c for c in COLLECTIONS.values()
 class GBDXParser(SatUtilsParser):
 
     def __init__(self, *args, **kwargs):
+        # change defaults from sat-search
+        # data directory to store downloaded imagery
+        config.DATADIR = os.getenv('SATUTILS_DATADIR', './')
+        # filename pattern for saving files
+        config.FILENAME = os.getenv('SATUTILS_FILENAME', '${date}_${c:id}_${id}')
+
         super(GBDXParser, self).__init__(*args, **kwargs)
         group = self.add_argument_group('GBDX parameters')
         #group.add_argument('--gettiles', help='Fetch tiles at this zoom level', default=None)
@@ -58,27 +64,74 @@ class GBDXScene(Scene):
 
     def __init__(self, feature):
         """ Transforms a DG record into a STAC item """
-        props = {
-            'id': feature['catalogID'],
-            'datetime': feature['timestamp'],
-            'eo:cloud_cover': feature['cloudCover'],
-            'eo:gsd': feature['multiResolution'],
-            'eo:sun_azimuth': feature['sunAzimuth'],
-            'eo:sun_elevation': feature['sunElevation'],
-            'eo:off_nadir': feature['offNadirAngle'],
-            'eo:azimuth': feature['targetAzimuth'],
-            'dg:image_bands': feature['imageBands']
-        }
-        geom = shapely.wkt.loads(feature['footprintWkt'])
-        item = {
-            'properties': props,
-            'geometry': geoj.Feature(geometry=geom)['geometry'],
-            'assets': {
-                'thumbnail': {'rel': 'thumbnail', 'href': feature['browseURL']}
+        if 'catalogID' in feature:
+            # if this is a DG record, transform it
+            props = {
+                'id': feature['catalogID'],
+                'datetime': feature['timestamp'],
+                'eo:cloud_cover': feature['cloudCover'],
+                'eo:gsd': feature['multiResolution'],
+                'eo:sun_azimuth': feature['sunAzimuth'],
+                'eo:sun_elevation': feature['sunElevation'],
+                'eo:off_nadir': feature['offNadirAngle'],
+                'eo:azimuth': feature['targetAzimuth'],
+                'dg:image_bands': feature['imageBands']
             }
-        }
-        feature = dict_merge(item, _COLLECTIONS[feature['platformName']])
-        super(GBDXParser, self).__init__(feature)
+            geom = shapely.wkt.loads(feature['footprintWkt'])
+            item = {
+                'properties': props,
+                'geometry': geoj.Feature(geometry=geom)['geometry'],
+                'assets': {
+                    'thumbnail': {'rel': 'thumbnail', 'href': feature['browseURL']}
+                }
+            }
+            feature = dict_merge(item, _COLLECTIONS[feature['platformName']])
+        super(GBDXScene, self).__init__(feature)
+
+    def download(self, key, **kwargs):
+        """ Download this key from scene assets """
+        fname = super().download(key, **kwargs)
+        if key == 'thumbnail':
+            geoimg = gippy.GeoImage(fname)
+            bname, ext = os.path.splitext(fname)
+            wldfile = bname + '.wld'
+            coords = self.geometry['coordinates']
+            while len(coords) == 1:
+                coords = coords[0]
+            lats = [c[1] for c in coords]
+            lons = [c[0] for c in coords]
+            with open(wldfile, 'w') as f:
+                f.write('%s\n' % ((max(lons)-min(lons))/geoimg.xsize()))
+                f.write('0.0\n0.0\n')
+                f.write('%s\n' % (-(max(lats)-min(lats))/geoimg.ysize()))
+                f.write('%s\n%s\n' % (min(lons), max(lats)))
+
+            srs = '["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,' + \
+                    'AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0],' + \
+                    'UNIT["degree",0.0174532925199433],AUTHORITY["EPSG","4326"]]'
+        
+            with open(fname+'.aux.xml', 'w') as f:
+                f.write('<PAMDataset><SRS>PROJCS%s</SRS></PAMDataset>' % srs)
+            #geoimg = None
+            # convert to GeoTiff
+            #geoimg = gippy.GeoImage(fname)
+            #geoimg.set_srs('epsg:4326')
+            #geoimg.save(bname, format='GTIFF', options={'COMPRESS': 'JPEG'})
+            #os.remove(fname)
+            #os.remove(wldfile)
+            #fname = geoimg.filename()
+            return fname
+
+
+class GBDXScenes(Scenes):
+
+    @classmethod
+    def load(cls, filename):
+        """ Load a collections class from a GeoJSON file of metadata """
+        with open(filename) as f:
+            geoj = json.loads(f.read())
+        scenes = [GBDXScene(feature) for feature in geoj['features']]
+        return cls(scenes, properties=geoj.get('properties', {}))
 
 
 def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):

@@ -10,7 +10,7 @@ import numpy as np
 from dateutil.parser import parse as dateparser
 from shapely.geometry import shape, Polygon
 
-from satsearch.scene import Scene, Scenes
+from satsearch.scene import Scenes
 from satsearch.parser import SatUtilsParser
 import satsearch.config as config
 import gippy
@@ -28,9 +28,9 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
          order=False, gettiles=None, geojson=None, pansharp=False, **kwargs):
 
     if scenes is None:
-        scenes = Scenes(satgbdx.query(**kwargs), properties=kwargs)
+        scenes = satgbdx.GBDXScenes(satgbdx.query(**kwargs), properties=kwargs)
     else:
-        scenes = Scenes.load(scenes)
+        scenes = satgbdx.GBDXScenes.load(scenes)
         # hack
         #for s in scenes.scenes:
         #    s.source = ''
@@ -68,7 +68,8 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
     # download files given keys
     if download is not None:
         if 'thumbnail' in download:
-            scenes.download(key=download.pop('thumbnail'))
+            scenes.download(key='thumbnail')
+            download.remove('thumbnail')
         if len(download) > 0:
             satgbdx.download_scenes(scenes)
         #for key in download:
