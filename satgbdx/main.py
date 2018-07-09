@@ -29,7 +29,7 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
          order=False, gettiles=None, geojson=None, pansharp=False, **kwargs):
 
     if scenes is None:
-        scenes = satgbdx.query(**kwargs)
+        scenes = Scenes(satgbdx.query(**kwargs), properties=kwargs)
     else:
         scenes = Scenes.load(scenes)
         # hack
@@ -53,6 +53,13 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
     if print_cal:
         print(scenes.text_calendar())
 
+    if order:
+        scenes = satgbdx.order_scenes(scenes, pansharp=pansharp)
+        #for scene in scenes:
+        #    scene.metadata['order_id'] = 'test'  # gbdx.ordering.order(scene.scene_id)
+        #    status = gbdx.ordering.status(scene.metadata['order_id'])[0]
+        #    print('%s\t%s\t%s\t%s' % (scene.metadata['order_id'], status['acquisition_id'], status['state'], status['location']))
+
     # save all metadata in JSON file
     if save is not None:
         scenes.save(filename=save, append=append)
@@ -61,8 +68,12 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
 
     # download files given keys
     if download is not None:
-        for key in download:
-            scenes.download(key=key)
+        if 'thumbnail' in download:
+            scenes.download(key=download.pop('thumbnail'))
+        if len(download) > 0:
+            satgbdx.download_scenes(scenes)
+        #for key in download:
+        #    scenes.download(key=key)
     """
     if download:
         for scene in scenes:
@@ -105,12 +116,6 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
                     fout = fout + '_pansharp'
                 geoimg = alg.cookie_cutter(tiles, fout, geovec[0], xres=res.x(), yres=res.y(), proj='EPSG:3857', options=opts)
 
-    if order:
-        for scene in scenes:
-            scene.metadata['order_id'] = 'test'  # gbdx.ordering.order(scene.scene_id)
-            status = gbdx.ordering.status(scene.metadata['order_id'])[0]
-            print('%s\t%s\t%s\t%s' % (scene.metadata['order_id'], status['acquisition_id'], status['state'], status['location']))
-
     #if download:
     #    order_scenes(scenes)
     #    fouts = download_scenes(scenes, nocrop=nocrop, pansharp=pansharp)
@@ -126,8 +131,11 @@ def cli():
     parser = satgbdx.GBDXParser.newbie(description='GBDX Search')
     args = parser.parse_args(sys.argv[1:])
 
-    # enable logging
-    #logging.basicConfig(stream=sys.stdout, level=args.pop('verbosity') * 10)
+    # read the GeoJSON file
+    if 'intersects' in args:
+        if os.path.exists(args['intersects']):
+            with open(args['intersects']) as f:
+                args['intersects'] = json.dumps(json.loads(f.read()))
 
     cmd = args.pop('command', None)
     if cmd is not None:

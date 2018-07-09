@@ -8,6 +8,7 @@ import math
 import shapely.wkt
 import numpy as np
 import tempfile
+import json
 from shapely.geometry import shape, Polygon
 from pygeotile.tile import Tile
 from satsearch.scene import Scene, Scenes
@@ -26,25 +27,6 @@ logger = logging.getLogger(__name__)
 logging.getLogger('requests').setLevel(logging.CRITICAL)
 gbdx = Interface()
 
-
-"""
-e.g.,
-./gbdx-search.py --intersects geojsonfile --printmd date scene_id satellite_name --clouds 0,10 --save ${gj%.*}
-/scenes-gbdx.geojson --date 2015-01-01,2017-11-01 --datadir ${gj%.*} --nosubdirs --download thumb
-
-
-Available satellite names
-{'GEOEYE01', 'WORLDVIEW03_VNIR', 'LANDSAT08', 'WORLDVIEW01', 'QUICKBIRD02', 'WORLDVIEW02', 'IKONOS', 'WORLDVIEW03_SWIR'}
-
-Available types
-{"DigitalGlobeAcquisition", "GBDXCatalogRecord", "IDAHOImage"}
-
-colorInterpretation
-BGRN
-PAN
-WORLDVIEW_8_BAND
-
-"""
 
 def load_collections():
     """ Load DG collections from included JSON file """
@@ -65,27 +47,10 @@ class GBDXParser(SatUtilsParser):
         group = self.add_argument_group('GBDX parameters')
         #group.add_argument('--gettiles', help='Fetch tiles at this zoom level', default=None)
         #group.add_argument('--pansharp', help='Pan-sharpen fetched tiles, if able', default=False, action='store_true')
-        group.add_argument('--order', action='store_true', default=False, help='Place order')
-        group.add_argument('--types', nargs='*', default=['DigitalGlobeAcquisition'],
-                           help='Data types ("DigitalGlobeAcquisition", "GBDXCatalogRecord", "IDAHOImage"')
-        group.add_argument('--overlap', help='Minimum %% overlap of footprint to AOI', default=None, type=int)
-
-    @classmethod
-    def newbie(cls, *args, **kwargs):
-        """ Return new parser """
-        parser = cls(*args, **kwargs)
-        parser.add_search_parser()
-        parser.add_load_parser()
-        return parser
-
-
-def calculate_overlap(scenes, geometry):
-    geom0 = shapely.wkt.loads(geometry)
-    # calculate overlap
-    for s in scenes:
-        geom = shape(s.geometry)
-        s.feature['properties']['overlap'] = int(geom.intersection(geom0).area / geom0.area * 100)
-    return scenes
+        self.download_group.add_argument('--order', action='store_true', default=False, help='Place order for these scenes')
+        #group.add_argument('--types', nargs='*', default=['DigitalGlobeAcquisition'],
+        #                   help='Data types ("DigitalGlobeAcquisition", "GBDXCatalogRecord", "IDAHOImage"')
+        self.output_group.add_argument('--overlap', help='Minimum %% overlap of footprint to AOI', default=None, type=int)
 
 
 def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
@@ -96,8 +61,8 @@ def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
         _sensors = [COLLECTIONS[c]['properties']['eo:instrument'] for c in kwargs.pop('c:id')]
         filters.append("sensorPlatformName = '%s'" % ','.join(_sensors))
     if 'intersects' in kwargs:
-        geovec = gippy.GeoVector(kwargs.pop('intersects'))
-        kwargs['searchAreaWkt'] = geovec[0].geometry()
+        geom = shape(json.loads(kwargs.pop('intersects'))['geometry'])
+        kwargs['searchAreaWkt'] = geom.wkt
     if 'datetime' in kwargs:
         dt = kwargs.pop('datetime').split('/')
         kwargs['startDate'] = dateparser(dt[0]).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
@@ -111,12 +76,14 @@ def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
         else:
             filters.append("cloudCover <= %s" % cc[0])
     results = gbdx.catalog.search(filters=filters, types=types, **kwargs)
-    scenes = Scenes([Scene(dg_to_stac(r['properties'])) for r in results])
+    with open('results.json', 'w') as f:
+        f.write(json.dumps(results))
+    scenes = [Scene(dg_to_stac(r['properties'])) for r in results]
 
     # calculate overlap
     scenes = calculate_overlap(scenes, kwargs['searchAreaWkt'])
     if overlap is not None: 
-        scenes.scenes = list(filter(lambda x: x['overlap'] >= overlap, scenes.scenes))
+        scenes = list(filter(lambda x: x['overlap'] >= overlap, scenes))
 
     return scenes
 
@@ -145,46 +112,70 @@ def dg_to_stac(record):
     return dict_merge(item, _COLLECTIONS[record['platformName']])
 
 
+def calculate_overlap(scenes, geometry):
+    geom0 = shapely.wkt.loads(geometry)
+    # calculate overlap
+    for s in scenes:
+        geom = shape(s.geometry)
+        s.feature['properties']['overlap'] = int(geom.intersection(geom0).area / geom0.area * 100)
+    return scenes
+
+
 def utm_epsg(latlon):
     zone = utm.from_latlon(latlon[0], latlon[1])
     return ('EPSG:327' if latlon[0] < 0 else 'EPSG:326') + str(zone[2])
 
 
-def order_scenes(scenes):
+def order(scene, pansharp=False):
     """ Order this scene """
-    for scene in scenes:
-        scene.metadata['order_id'] = gbdx.ordering.order(scene.scene_id)
-        status = gbdx.ordering.status(scene.metadata['order_id'])[0]
-        scene.metadata['location'] = status['location']
-        print('%s\t%s\t%s\t%s' % (scene.metadata['order_id'], status['acquisition_id'], status['state'], status['location']))
+    if 'dg:order_id' not in scene.keys():
+        scene.feature['properties']['dg:order_id'] = gbdx.ordering.order(scene['id'])
+    sid = scene.feature['properties']['dg:order_id']
+    status = gbdx.ordering.status(sid)[0]
+    key = 'ordered_pansharp' if pansharp else 'ordered'
+    if status['location'] != 'not_delivered':
+        scene['assets'][key] = {'href': status['location']}
+    #scene.feature['properties']['location'] = status['location']
+    print('%s\t%s\t%s\t%s' % (sid, status['acquisition_id'], status['state'], status['location']))
+    return scene
 
 
-def download_scenes(scenes, nocrop=False, pansharp=False):
+def order_scenes(scenes, pansharp=False):
+    """ Order this scene """
+    [order(s, pansharp=pansharp) for s in scenes]
+    return scenes
+
+
+def download_scenes(scenes, pansharp=False):
     """ Download these scenes """
     with tempfile.NamedTemporaryFile(suffix='.geojson', mode='w', delete=False) as f:
         aoiname = f.name
-        aoistr = json.dumps(scenes.metadata['aoi'])
+        aoistr = json.dumps(scenes.properties['intersects'])
         f.write(aoistr)
     geovec = gippy.GeoVector(aoiname)
     fouts = []
     dirout = tempfile.mkdtemp()
-    crop = True if nocrop is False else False
+    key = 'ordered_pansharp' if pansharp else 'ordered'
+    # TODO - wrap this in a try-except-finally to ensure removal of files
     for scene in scenes:
-        if 'location' in scene.metadata:
-            path = scene.get_path()
+        order(scene, pansharp=pansharp)
+        if key in scene.assets:
             #dt = dateparser(scene.metadata['timestamp'])
             #bname = '%s_%s' % (dt.strftime('%Y-%m-%d_%H-%M-%S'), scene.metadata['satellite_name'])
             ps = '_pansharp' if pansharp else ''
-            fout = os.path.join(path, scene.get_filename(suffix=ps)) + '.tif'
+            fout = os.path.join(scene.get_path(), scene.get_filename(suffix=ps)) + '.tif'
             try:
-                img = CatalogImage(scene.scene_id, pansharpen=pansharp, bbox=scenes.bbox(), proj=utm_epsg(scenes.center()))
+                # TODO - allow for other projections
+                import pdb; pdb.set_trace()
+                img = CatalogImage(scene['id'], pansharpen=pansharp, bbox=scenes.bbox(), proj=utm_epsg(scenes.center()))
                 if not os.path.exists(fout):
                     tif = img.geotiff(path=fout)
                     geoimg = gippy.GeoImage(tif, True)
-                    if scene.metadata['satellite_name'] == 'GEOEYE01' or scene.metadata['satellite_name'] == 'QUICKBIRD02':
+                    if scene['eo:platform'] == 'GEOEYE01' or scene['eo:platform'] == 'QUICKBIRD02':
                         geoimg.set_nodata(0)
                     else:
                         geoimg.set_nodata(-1e10)
+                    # this clips the image to the AOI
                     res = geoimg.resolution()
                     fout2 = os.path.join(dirout, os.path.basename(fout))
                     imgout = alg.cookie_cutter([geoimg], fout2, geovec[0], xres=res.x(), yres=res.y(), proj=geoimg.srs())
