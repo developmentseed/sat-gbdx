@@ -99,7 +99,7 @@ optional arguments:
   -h, --help     show this help message and exit
 ```
 
-As can be seen there are two subcommands, each of which has it's own online help (i.e. "sat-gbdx search -h" and "sat-gbdx-load -h") and will be discussed in detail below.
+As can be seen there are two subcommands, each of which has it's own online help (i.e. "sat-gbdx search -h" and "sat-gbdx load -h") and will be discussed in detail below.
 
 #### Searching
 
