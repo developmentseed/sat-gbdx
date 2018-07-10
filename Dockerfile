@@ -19,4 +19,9 @@ RUN \
     pip3 install . -v; \
     rm -rf /build/*;
 
+# Install some complements to work
+RUN curl https://rpm.nodesource.com/setup_8.x | bash -
+RUN yum install -y nodejs
+RUN git clone -b dev https://github.com/Rub21/geokit && cd geokit && npm link
+
 WORKDIR /home/geolambda
