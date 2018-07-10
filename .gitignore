@@ -9,3 +9,4 @@ MANIFEST
 .coverage
 .cache
 .gbdx-config
+.env

@@ -145,7 +145,12 @@ def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
         _sensors = [COLLECTIONS[c]['properties']['eo:instrument'] for c in kwargs.pop('c:id')]
         filters.append("sensorPlatformName = '%s'" % ','.join(_sensors))
     if 'intersects' in kwargs:
-        geom = shape(json.loads(kwargs.pop('intersects'))['geometry'])
+        fc = json.loads(kwargs.pop('intersects'))
+        geom = None
+        if fc.get('features'):
+            geom = shape(fc['features'][0]['geometry'])
+        else:
+            geom = shape(fc['geometry'])
         kwargs['searchAreaWkt'] = geom.wkt
     if 'datetime' in kwargs:
         dt = kwargs.pop('datetime').split('/')
