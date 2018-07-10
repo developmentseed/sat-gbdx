@@ -15,7 +15,8 @@
             "eo:bands": {
                 "1": {"common_name": "blue"},
                 "2": {"common_name": "green"},
-                "3": {"common_name": "red"}
+                "3": {"common_name": "red"},
+                "4": {"common_name": "nir"}
             },
             "assets": {}
         },
@@ -33,7 +34,8 @@
             "eo:bands": {
                 "1": {"common_name": "blue"},
                 "2": {"common_name": "green"},
-                "3": {"common_name": "red"}
+                "3": {"common_name": "red"},
+                "4": {"common_name": "nir"}
             },
             "assets": {}
         },
@@ -113,6 +115,25 @@
             "eo:bands": {
                 "1": {"common_name": "swir16"},
                 "2": {"common_name": "swir22"}
+            },
+            "assets": {}
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "c:id": "worldview-4",
+                "c:name": "WorldView-4",
+                "c:description": "WorldView-4 satellite imagery",
+                "eo:platform": "WORLDVIEW04",
+                "eo:instrument": "WORLDVIEW04",
+                "provider": "Digital Globe",
+                "license": ""
+            },
+            "eo:bands":  {
+                "1": {"common_name": "blue"},
+                "2": {"common_name": "green"},
+                "3": {"common_name": "red"},
+                "4": {"common_name": "nir"}
             },
             "assets": {}
         }
