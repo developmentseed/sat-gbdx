@@ -6,7 +6,6 @@ import logging
 import geojson as geoj
 import math
 import shapely.wkt
-import numpy as np
 import tempfile
 import json
 from shapely.geometry import shape, Polygon
