@@ -1,5 +1,8 @@
 FROM developmentseed/geolambda:latest
 
+ENV \
+    PYCURL_SSL_LIBRARY=openssl
+
 # install requirements
 WORKDIR /build
 COPY requirements*txt /build/
@@ -10,7 +13,7 @@ RUN \
 # install app
 COPY . /build
 RUN \
-    pip install . -v; \
+    pip3 install . -v; \
     rm -rf /build/*;
 
 WORKDIR /home/geolambda

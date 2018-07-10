@@ -16,5 +16,4 @@ services:
     entrypoint: bash -c 'pytest test/'
     env_file: .env
     volumes:
-      - './lambda:/home/geolambda/lambda'
       - './test:/home/geolambda/test'
