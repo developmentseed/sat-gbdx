@@ -24,5 +24,5 @@ for year in "${YEARS[@]}"; do
          rm -rf $id/$year/
      fi
 done
-tar czf $id.tar.gz $id/
-mv $id.tar.gz $id/
+tar czf $id-search-gbdx.tar.gz $id/
+mv $id-search-gbdx.tar.gz $id/
