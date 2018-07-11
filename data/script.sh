@@ -21,4 +21,4 @@ do
     # let's just keep the important files
     rm $id/$id-$cid.geojson
 done
-    rm $id/$id.geojson
+#rm $id/$id.geojson
