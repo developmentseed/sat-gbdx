@@ -165,8 +165,8 @@ def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
         else:
             filters.append("cloudCover <= %s" % cc[0])
     results = gbdx.catalog.search(filters=filters, types=types, **kwargs)
-    with open('results.json', 'w') as f:
-        f.write(json.dumps(results))
+    #with open('results.json', 'w') as f:
+    #    f.write(json.dumps(results))
     scenes = [GBDXScene(r['properties']) for r in results]
 
     # calculate overlap
