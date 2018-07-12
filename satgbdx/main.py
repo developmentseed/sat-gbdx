@@ -28,11 +28,11 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
          order=False, gettiles=None, geojson=None, pansharp=False, **kwargs):
 
     if scenes is None:
+        scenes = satgbdx.GBDXScenes(satgbdx.query(**kwargs), properties=kwargs)
+    else:
         # ensure we update the results file every time (could have ordering information)
         if save is None:
             save = scenes
-        scenes = satgbdx.GBDXScenes(satgbdx.query(**kwargs), properties=kwargs)
-    else:
         scenes = satgbdx.GBDXScenes.load(scenes)
 
     if review:

@@ -199,8 +199,7 @@ def order(scene):
     status = gbdx.ordering.status(sid)[0]
     if status['location'] != 'not_delivered':
         scene['assets']['full'] = {'href': status['location']}
-    #scene.feature['properties']['location'] = status['location']
-    print('Order status for %s: %s, %s' % (status['acquisition_id'], status['state'], status['location']))
+    print('Order %s status for %s: %s, %s' % (sid, status['acquisition_id'], status['state'], status['location']))
     return scene
 
 
