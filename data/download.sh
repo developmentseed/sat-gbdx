@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 zoneId=$1
 date=$2
-featuresIds=$2
+featuresIds=$3
 DIR=$zoneId/$date
 
 # Filter the features which were evaluated as ok
