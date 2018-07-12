@@ -165,8 +165,8 @@ def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
         else:
             filters.append("cloudCover <= %s" % cc[0])
     results = gbdx.catalog.search(filters=filters, types=types, **kwargs)
-    with open('results.json', 'w') as f:
-        f.write(json.dumps(results))
+    #with open('results.json', 'w') as f:
+    #    f.write(json.dumps(results))
     scenes = [GBDXScene(r['properties']) for r in results]
 
     # calculate overlap
@@ -217,7 +217,6 @@ def download_scenes(scenes, pansharp=False):
     for scene in scenes:
         order(scene)
         if 'full' in scene.assets:
-            import pdb; pdb.set_trace()
             #dt = dateparser(scene.metadata['timestamp'])
             #bname = '%s_%s' % (dt.strftime('%Y-%m-%d_%H-%M-%S'), scene.metadata['satellite_name'])
             ps = '_pansharp' if pansharp else ''
