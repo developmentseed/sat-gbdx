@@ -94,7 +94,7 @@ class GBDXScene(Scene):
     def download(self, key, **kwargs):
         """ Download this key from scene assets """
         fname = super().download(key, **kwargs)
-        if key == 'thumbnail':
+        if key == 'thumbnail' and fname is not None:
             geoimg = gippy.GeoImage(fname)
             bname, ext = os.path.splitext(fname)
             wldfile = bname + '.wld'
