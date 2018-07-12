@@ -19,7 +19,7 @@ for year in "${YEARS[@]}"; do
          --save $zoneId/$year/scenes.geojson)"
      echo $OUTPUT
      numScenes=$(echo $OUTPUT | sed 's/[^0-9]*//g')
-     mv results.json $zoneId/$year
+    #  mv results.json $zoneId/$year
      if (( $numScenes == 0 )); then
          rm -rf $zoneId/$year/
      fi
