@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 import sys
+import shutil
 import json
 import logging
 import geojson as geoj
@@ -219,7 +220,7 @@ def download_scenes(scenes, pansharp=False):
             #dt = dateparser(scene.metadata['timestamp'])
             #bname = '%s_%s' % (dt.strftime('%Y-%m-%d_%H-%M-%S'), scene.metadata['satellite_name'])
             ps = '_pansharp' if pansharp else ''
-            fout = os.path.join(scene.get_path(), scene.get_filename(suffix=ps)) + '.tif'
+            fout = os.path.join(os.getcwd(), scene.get_filename(suffix=ps)) + '.tif'
             try:
                 # TODO - allow for other projections
                 img = CatalogImage(scene['id'], pansharpen=pansharp, bbox=scenes.bbox(), proj=utm_epsg(scenes.center()))
@@ -236,7 +237,7 @@ def download_scenes(scenes, pansharp=False):
                     imgout = alg.cookie_cutter([geoimg], fout2, geovec[0], xres=res.x(), yres=res.y(), proj=geoimg.srs())
                     imgout = None
                     os.remove(fout)
-                    os.rename(fout2, fout)
+                    shutil.move(fout2, fout)
                 fouts.append(fout)
             except Exception as e:
                 print(e)
