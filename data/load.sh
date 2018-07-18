@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 zoneId=$1
 date=$2
 featuresIds=$3
