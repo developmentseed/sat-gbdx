@@ -1,5 +1,4 @@
 # !/usr/bin/env bash
-echo "zones, year, id" > error.csv
 for zone in ./* ; do
     if [[ -d $zone ]]; then
         zoneID=${zone:2:10}
