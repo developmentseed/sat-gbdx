@@ -6,7 +6,7 @@
                 "collection": "quickbird-2",
                 "description": "QuickBird-2 satellite imagery",
                 "eo:platform": "QuickBird-2",
-                "eo:instrument": "QuickBird-2",
+                "eo:instrument": "QUICKBIRD02",
                 "providers": [
                     {"name": "Digital Globe", "url": "https://www.digitalglobe.com/", "roles": ["producer", "processor"]}
                 ],
@@ -27,7 +27,7 @@
                 "collection": "geoeye-1",
                 "description": "GeoEye-1 satellite imagery",
                 "eo:platform": "GeoEye-1",
-                "eo:instrument": "GeoEye-1",
+                "eo:instrument": "GEOEYE01",
                 "providers": [
                     {"name": "Digital Globe", "url": "https://www.digitalglobe.com/", "roles": ["producer", "processor"]}
                 ],
@@ -47,7 +47,7 @@
                 "collection": "worldview-1",
                 "description": "WorldView-1 satellite imagery",
                 "eo:platform": "WorldView-1",
-                "eo:instrument": "WorldView-1",
+                "eo:instrument": "WORLDVIEW01",
                 "providers": [
                     {"name": "Digital Globe", "url": "https://www.digitalglobe.com/", "roles": ["producer", "processor"]}
                 ],
@@ -64,7 +64,7 @@
                 "collection": "worldview-2",
                 "description": "WorldView-2 satellite imagery",
                 "eo:platform": "WorldView-2",
-                "eo:instrument": "WorldView-2",
+                "eo:instrument": "WORLDVIEW02",
                 "providers": [
                     {"name": "Digital Globe", "url": "https://www.digitalglobe.com/", "roles": ["producer", "processor"]}
                 ],
@@ -146,7 +146,7 @@
                 "collection": "worldview-3",
                 "description": "WorldView-3 satellite imagery",
                 "eo:platform": "WorldView-3-vnir",
-                "eo:instrument": "WorldView-3-vnir",
+                "eo:instrument": "WORLDVIEW03_VNIR",
                 "providers": [
                     {"name": "Digital Globe", "url": "https://www.digitalglobe.com/", "roles": ["producer", "processor"]}
                 ],
@@ -215,7 +215,7 @@
                 "collection": "worldview-3-swir",
                 "description": "WorldView-3 satellite imagery",
                 "eo:platform": "WorldView-3",
-                "eo:instrument": "WorldView-3-swir",
+                "eo:instrument": "WORLDVIEW03_SWIR",
                 "providers": [
                     {"name": "Digital Globe", "url": "https://www.digitalglobe.com/", "roles": ["producer", "processor"]}
                 ],
@@ -233,7 +233,7 @@
                 "collection": "worldview-4",
                 "description": "WorldView-4 satellite imagery",
                 "eo:platform": "WorldView-4",
-                "eo:instrument": "WorldView-4",
+                "eo:instrument": "WORLDVIEW04",
                 "providers": [
                     {"name": "Digital Globe", "url": "https://www.digitalglobe.com/", "roles": ["producer", "processor"]}
                 ],
