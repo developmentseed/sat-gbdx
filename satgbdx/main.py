@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 def main(scenes=None, review=False, print_md=None, print_cal=False,
          save=None, append=False, download=None, 
-         order=False, gettiles=None, geojson=None, pansharp=False, **kwargs):
+         order=False, gettiles=None, geojson=None, **kwargs):
 
     if scenes is None:
         scenes = satgbdx.GBDXScenes(satgbdx.query(**kwargs), properties=kwargs)
@@ -55,69 +55,19 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
 
     # download files given keys
     if download is not None:
-        if 'thumbnail' in download:
-            scenes.download(key='thumbnail')
-            download.remove('thumbnail')
-        if 'full' in download:
-            satgbdx.download_scenes(scenes)
-            download.remove('full')
-        if len(download) > 0:
-            logger.warning('Download keys not recognized (%s)' % ','.join(download))
-            satgbdx.download_scenes(scenes)
-        #for key in download:
-        #    scenes.download(key=key)
-    """
-    if download:
-        for scene in scenes:
-            fout = scene.get_path(no_create=True) + '.jpg'
-            fname = scene.download_file(scene.metadata['browseURL'], fout=fout)
-            wldfile = os.path.splitext(os.path.basename(fname))[0] + '.wld'
-            fout = os.path.join(os.path.dirname(fout), wldfile)
-            coords = scene.geometry['coordinates'][0][0]
-            lats = [c[1] for c in coords]
-            lons = [c[0] for c in coords]
-            timg = gippy.GeoImage(fname)
-            with open(fout, 'w') as f:
-                f.write('%s\n' % ((max(lons)-min(lons))/timg.xsize()))
-                f.write('0.0\n0.0\n')
-                f.write('%s\n' % (-(max(lats)-min(lats))/timg.ysize()))
-                f.write('%s\n%s\n' % (min(lons), max(lats)))
-    """
+        for key in download:
+            if key not in ['thumbnail', 'full', 'rgb']:
+                logger.warning('Download keys not recognized (%s)' % ','.join(download))
+            if key == 'thumbnail':
+                scenes.download(key='thumbnail')
+            elif key == 'rgb':
+                satgbdx.download_scenes(scenes, pansharpen=True, spec='rgb')
+            elif key == 'full':
+                satgbdx.download_scenes(scenes)
 
     # save all metadata in JSON file
     if save is not None:
-        scenes.save(filename=save, append=append)
-
-    if gettiles is not None:
-        zoom = gettiles
-        # find matching MS/PAN scenes
-        pan_scenes = [scene for scene in scenes if scene.metadata['colorInterpretation'] == 'PAN']
-        other_scenes = [scene for scene in scenes if scene.metadata['colorInterpretation'] != 'PAN']
-        for scene in pan_scenes:
-            for sc in other_scenes:
-                if scene.metadata['catalogID'] == sc.metadata['catalogID']:
-                    sc.metadata['PAN_SCENEID'] = scene.scene_id
-        opts = {}
-        for scene in other_scenes:
-            filenames = satgbdx.get_tiles(scene, geojson, zoom, path=config.DATADIR, pansharp=pansharp)
-            tiles = [utils.open_tile(filename) for filename in filenames]
-            if geojson is not None:
-                geovec = gippy.GeoVector(geojson)
-                res = tiles[0].resolution()
-                # put these in the top level
-                pattern = config.SUBDIRS + '_z%s.tif' % zoom
-                fout = os.path.join(scene.get_path(subdirs=''), scene.get_filename(pattern))
-                if pansharp:
-                    fout = fout + '_pansharp'
-                geoimg = alg.cookie_cutter(tiles, fout, geovec[0], xres=res.x(), yres=res.y(), proj='EPSG:3857', options=opts)
-
-    #if download:
-    #    order_scenes(scenes)
-    #    fouts = download_scenes(scenes, nocrop=nocrop, pansharp=pansharp)
-
-    # save all metadata in JSON file
-    if save is not None:
-        scenes.save(filename=save, append=append)
+        scenes.save(filename=save)
 
     return scenes
 
