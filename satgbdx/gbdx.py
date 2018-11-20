@@ -12,7 +12,7 @@ import json
 from shapely.geometry import shape, Polygon
 from pygeotile.tile import Tile
 from satsearch.scene import Scene, Scenes
-from satsearch.parser import SatUtilsParser
+
 from satsearch.utils import dict_merge
 import satsearch.config as config
 from dateutil.parser import parse as dateparser
@@ -40,27 +40,6 @@ _COLLECTIONS = {c['properties']['eo:instrument']:c for c in COLLECTIONS.values()
 
 COG_OPTS = {'COMPRESS': 'DEFLATE', 'PREDICTOR': '2', 'INTERLEAVE': 'BAND',
         'TILED': 'YES', 'BLOCKXSIZE': '512', 'BLOCKYSIZE': '512'}
-
-
-class GBDXParser(SatUtilsParser):
-
-    def __init__(self, *args, **kwargs):
-        # change defaults from sat-search
-        # data directory to store downloaded imagery
-        config.DATADIR = os.getenv('SATUTILS_DATADIR', './')
-        # filename pattern for saving files
-        config.FILENAME = os.getenv('SATUTILS_FILENAME', '${date}_${c:id}_${id}')
-        super(GBDXParser, self).__init__(*args, **kwargs)
-        self.download_group.add_argument('--pansharp', help='Pan-sharpen fetched tiles, if able', default=False, action='store_true')
-        self.download_group.add_argument('--order', action='store_true', default=False, help='Place order for these scenes')
-
-    @classmethod
-    def newbie(cls, *args, **kwargs):
-        parser = super().newbie(*args, **kwargs)
-        #group.add_argument('--types', nargs='*', default=['DigitalGlobeAcquisition'],
-        #                   help='Data types ("DigitalGlobeAcquisition", "GBDXCatalogRecord", "IDAHOImage"')
-        parser.search_group.add_argument('--overlap', help='Minimum %% overlap of footprint to AOI', default=1, type=int)        
-        return parser
 
 
 class GBDXScene(Scene):

@@ -30,7 +30,7 @@ setup(
     ],
     keywords='',
     entry_points={
-        'console_scripts': ['sat-gbdx=satgbdx.main:cli'],
+        'console_scripts': ['sat-gbdx=satgbdx.cli:cli'],
     },
     packages=find_packages(exclude=['docs', 'tests*']),
     include_package_data=True,

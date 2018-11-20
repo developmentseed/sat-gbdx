@@ -1,23 +1,9 @@
 #!/usr/bin/env python
 import os
-import sys
-import json
 import logging
-import geojson as geoj
-import math
-import shapely.wkt
-import numpy as np
-from dateutil.parser import parse as dateparser
-from shapely.geometry import shape, Polygon
-
-from satsearch.scene import Scenes
-from satsearch.parser import SatUtilsParser
-import satsearch.config as config
-import gippy
-import gippy.algorithms as alg
 
 import satgbdx
-import satgbdx.utils as utils
+import satsearch.config as config
 
 
 logger = logging.getLogger(__name__)
@@ -70,22 +56,3 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
         scenes.save(filename=save)
 
     return scenes
-
-
-def cli():
-    parser = satgbdx.GBDXParser.newbie(description='GBDX Search')
-    args = parser.parse_args(sys.argv[1:])
-
-    # read the GeoJSON file
-    if 'intersects' in args:
-        if os.path.exists(args['intersects']):
-            with open(args['intersects']) as f:
-                args['intersects'] = json.dumps(json.loads(f.read()))
-
-    cmd = args.pop('command', None)
-    if cmd is not None:
-        main(**args)
-
-
-if __name__ == "__main__":
-    cli()
