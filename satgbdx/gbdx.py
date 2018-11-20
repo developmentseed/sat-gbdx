@@ -32,11 +32,14 @@ def load_collections():
     path = os.path.dirname(__file__)
     with open(os.path.join(path, 'collections.json')) as f:
         cols = json.loads(f.read())
-    return {c['properties']['c:id']:c for c in cols['features']}
+    return {c['id']:c for c in cols['collections']}
 
 
 COLLECTIONS = load_collections()
 _COLLECTIONS = {c['properties']['eo:instrument']:c for c in COLLECTIONS.values()}
+
+COG_OPTS = {'COMPRESS': 'DEFLATE', 'PREDICTOR': '2', 'INTERLEAVE': 'BAND',
+        'TILED': 'YES', 'BLOCKXSIZE': '512', 'BLOCKYSIZE': '512'}
 
 
 class GBDXParser(SatUtilsParser):
@@ -54,9 +57,6 @@ class GBDXParser(SatUtilsParser):
     @classmethod
     def newbie(cls, *args, **kwargs):
         parser = super().newbie(*args, **kwargs)
-        #parser.download_group.add_argument('--gettiles', help='Fetch tiles at this zoom level', default=None)
-        
-        #parser.download_group.add_argument('--order', action='store_true', default=False, help='Place order for these scenes')
         #group.add_argument('--types', nargs='*', default=['DigitalGlobeAcquisition'],
         #                   help='Data types ("DigitalGlobeAcquisition", "GBDXCatalogRecord", "IDAHOImage"')
         parser.search_group.add_argument('--overlap', help='Minimum %% overlap of footprint to AOI', default=1, type=int)        
@@ -91,6 +91,7 @@ class GBDXScene(Scene):
             }
             feature = dict_merge(item, _COLLECTIONS[feature['platformName']])
         super(GBDXScene, self).__init__(feature)
+
 
     def download(self, key, **kwargs):
         """ Download this key from scene assets """
@@ -141,39 +142,44 @@ class GBDXScenes(Scenes):
 def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
     """ Perform a GBDX query by converting from STAC terms to DG terms """
     filters = []  # ["offNadirAngle < 20"
-    # build DG search parameters
-    if 'c:id' in kwargs:
-        _sensors = [COLLECTIONS[c]['properties']['eo:instrument'] for c in kwargs.pop('c:id')]
-        filters.append("sensorPlatformName = '%s'" % ','.join(_sensors))
-    if 'intersects' in kwargs:
-        fc = json.loads(kwargs.pop('intersects'))
-        geom = None
-        if fc.get('features'):
-            geom = shape(fc['features'][0]['geometry'])
-        else:
-            geom = shape(fc['geometry'])
-        kwargs['searchAreaWkt'] = geom.wkt
-    if 'datetime' in kwargs:
-        dt = kwargs.pop('datetime').split('/')
-        kwargs['startDate'] = dateparser(dt[0]).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-        if len(dt) > 1:
-            kwargs['endDate'] = dateparser(dt[1]).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-    if 'eo:cloud_cover' in kwargs:
-        cc = kwargs.pop('eo:cloud_cover').split('/')
-        if len(cc) == 2:
-            filters.append("cloudCover >= %s" % cc[0])
-            filters.append("cloudCover <= %s" % cc[1])
-        else:
-            filters.append("cloudCover <= %s" % cc[0])
-    results = gbdx.catalog.search(filters=filters, types=types, **kwargs)
+    if 'id' in kwargs:
+        results = [gbdx.catalog.get(kwargs['id'])]
+    else:
+        # build DG search parameters
+        if 'c:id' in kwargs:
+            _sensors = [COLLECTIONS[c]['properties']['eo:instrument'] for c in kwargs.pop('c:id')]
+            filters.append("sensorPlatformName = '%s'" % ','.join(_sensors))
+        if 'intersects' in kwargs:
+            fc = json.loads(kwargs.pop('intersects'))
+            geom = None
+            if fc.get('features'):
+                geom = shape(fc['features'][0]['geometry'])
+            else:
+                geom = shape(fc['geometry'])
+            kwargs['searchAreaWkt'] = geom.wkt
+        if 'datetime' in kwargs:
+            dt = kwargs.pop('datetime').split('/')
+            kwargs['startDate'] = dateparser(dt[0]).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+            if len(dt) > 1:
+                kwargs['endDate'] = dateparser(dt[1]).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        if 'eo:cloud_cover' in kwargs:
+            cc = kwargs.pop('eo:cloud_cover').split('/')
+            if len(cc) == 2:
+                filters.append("cloudCover >= %s" % cc[0])
+                filters.append("cloudCover <= %s" % cc[1])
+            else:
+                filters.append("cloudCover <= %s" % cc[0])
+        results = gbdx.catalog.search(filters=filters, types=types, **kwargs)
+
     #with open('results.json', 'w') as f:
     #    f.write(json.dumps(results))
     scenes = [GBDXScene(r['properties']) for r in results]
 
     # calculate overlap
-    scenes = calculate_overlap(scenes, kwargs['searchAreaWkt'])
-    if overlap is not None: 
-        scenes = list(filter(lambda x: x['overlap'] >= overlap, scenes))
+    if 'searchAreaWkt' in kwargs:
+        scenes = calculate_overlap(scenes, kwargs['searchAreaWkt'])
+        if overlap is not None: 
+            scenes = list(filter(lambda x: x['overlap'] >= overlap, scenes))
 
     return scenes
 
@@ -198,13 +204,11 @@ def order(scene):
         scene.feature['properties']['dg:order_id'] = gbdx.ordering.order(scene['id'])
     sid = scene.feature['properties']['dg:order_id']
     status = gbdx.ordering.status(sid)[0]
-    if status['location'] != 'not_delivered':
-        scene['assets']['full'] = {'href': status['location']}
-    print('Order %s status for %s: %s, %s' % (sid, status['acquisition_id'], status['state'], status['location']))
-    return scene
+    print('%s (Order %s): %s' % (status['acquisition_id'], sid, status['state']))
+    return False if status['location'] == 'not_delivered' else True
 
 
-def download_scenes(scenes, pansharp=False):
+def download_scenes(scenes, spec='', pansharpen=False, acomp=False, dra=False):
     """ Download these scenes """
     with tempfile.NamedTemporaryFile(suffix='.geojson', mode='w', delete=False) as f:
         aoiname = f.name
@@ -215,17 +219,20 @@ def download_scenes(scenes, pansharp=False):
     dirout = tempfile.mkdtemp()
     # TODO - wrap this in a try-except-finally to ensure removal of files
     for scene in scenes:
-        order(scene)
-        if 'full' in scene.assets:
+        fulfilled = order(scene)
+        if fulfilled:
             #dt = dateparser(scene.metadata['timestamp'])
             #bname = '%s_%s' % (dt.strftime('%Y-%m-%d_%H-%M-%S'), scene.metadata['satellite_name'])
-            ps = '_pansharp' if pansharp else ''
-            fout = os.path.join(os.getcwd(), scene.get_filename(suffix=ps)) + '.tif'
+            suffix = '_pansharp' if pansharpen else ''
+            if spec == 'rgb':
+                suffix += '_rgb'
+            fout = os.path.join(os.getcwd(), scene.get_filename(suffix=suffix)) + '.tif'
             try:
                 # TODO - allow for other projections
-                img = CatalogImage(scene['id'], pansharpen=pansharp, bbox=scenes.bbox(), proj=utm_epsg(scenes.center()))
+                img = CatalogImage(scene['id'], pansharpen=pansharpen, acomp=acomp, dra=dra,
+                                   bbox=scenes.bbox()) #, proj=utm_epsg(scenes.center()))
                 if not os.path.exists(fout):
-                    tif = img.geotiff(path=fout)
+                    tif = img.geotiff(path=fout, proj='EPSG:4326', spec=spec)
                     geoimg = gippy.GeoImage(tif, True)
                     if scene['eo:platform'] == 'GEOEYE01' or scene['eo:platform'] == 'QUICKBIRD02':
                         geoimg.set_nodata(0)
@@ -234,7 +241,7 @@ def download_scenes(scenes, pansharp=False):
                     # this clips the image to the AOI
                     res = geoimg.resolution()
                     fout2 = os.path.join(dirout, os.path.basename(fout))
-                    imgout = alg.cookie_cutter([geoimg], fout2, geovec[0], xres=res.x(), yres=res.y(), proj=geoimg.srs())
+                    imgout = alg.cookie_cutter([geoimg], fout2, geovec[0], xres=res.x(), yres=res.y(), proj=geoimg.srs(), options=COG_OPTS)
                     imgout = None
                     os.remove(fout)
                     shutil.move(fout2, fout)
