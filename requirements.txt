@@ -1,9 +1,9 @@
-gippy~=1.0.1b1
+gippy~=1.0.1b5
 geojson~=2.3.0
-gbdxtools~=0.15.6
+gbdxtools~=0.16.0
 pygeotile~=1.0.0
 utm~=0.4.2
 dateutils~=0.6.6
-satsearch~=1.0.0b10
+sat-search~=0.1.0b1
 rasterio==1.0rc4
 requests[security]~=2.19.1
