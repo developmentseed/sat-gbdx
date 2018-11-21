@@ -84,7 +84,8 @@ class GBDXScene(Scene):
             self.feature['properties']['dg:order_id'] = gbdx.ordering.order(self['id'])
         sid = self.feature['properties']['dg:order_id']
         status = gbdx.ordering.status(sid)[0]
-        print('%s (Order %s): %s' % (status['acquisition_id'], sid, status['state']))
+        if status['location'] == 'not_delivered':
+            print('%s (Order %s): %s' % (status['acquisition_id'], sid, status['state']))
         return False if status['location'] == 'not_delivered' else True
 
     def download(self, key, **kwargs):
@@ -156,7 +157,7 @@ class GBDXScene(Scene):
             elif key == 'analytic':
                 acomp = True
 
-            fout = os.path.join(os.getcwd(), self.get_filename(suffix='_%s' % key)) + '.tif'
+            fout = os.path.join(self.get_path(), self.get_filename(suffix='_%s' % key)) + '.tif'
 
             with TemporaryDirectory() as temp_dir:
                 try:
@@ -201,7 +202,7 @@ def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
     """ Perform a GBDX query by converting from STAC terms to DG terms """
     filters = []  # ["offNadirAngle < 20"
     if 'id' in kwargs:
-        results = [gbdx.catalog.get(kwargs['id'])]
+        results = [gbdx.catalog.get(i) for i in kwargs['id'].split(',')]
     else:
         # build DG search parameters
         if 'c:id' in kwargs:
@@ -211,9 +212,14 @@ def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
             fc = json.loads(kwargs.pop('intersects'))
             geom = None
             if fc.get('features'):
+                # if FeatureCollection
                 geom = shape(fc['features'][0]['geometry'])
-            else:
+            elif fc.get('geometry'):
+                # if Feature
                 geom = shape(fc['geometry'])
+            else:
+                # if direct geometry
+                geom = shape(fc)
             kwargs['searchAreaWkt'] = geom.wkt
         if 'datetime' in kwargs:
             dt = kwargs.pop('datetime').split('/')
