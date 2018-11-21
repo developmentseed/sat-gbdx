@@ -35,21 +35,19 @@ def main(scenes=None, review=False, print_md=None, print_cal=False,
         print(scenes.text_calendar())
 
     if order:
-        scenes = [satgbdx.order(s) for s in scenes]
+        scenes = [s.order for s in scenes]
 
     print('%s scenes found' % len(scenes))
 
     # download files given keys
     if download is not None:
         for key in download:
-            if key not in ['thumbnail', 'full', 'rgb']:
+            if key not in ['thumbnail', 'default', 'rgb', 'visual', 'analytic']:
                 logger.warning('Download keys not recognized (%s)' % ','.join(download))
             if key == 'thumbnail':
                 scenes.download(key='thumbnail')
-            elif key == 'rgb':
-                satgbdx.download_scenes(scenes, pansharpen=True, spec='rgb')
-            elif key == 'full':
-                satgbdx.download_scenes(scenes)
+            else:
+                scenes.fetch(key)
 
     # save all metadata in JSON file
     if save is not None:

@@ -8,6 +8,8 @@ import geojson as geoj
 import math
 import shapely.wkt
 import tempfile
+from tempfile import TemporaryDirectory
+
 import json
 from shapely.geometry import shape, Polygon
 from pygeotile.tile import Tile
@@ -71,11 +73,26 @@ class GBDXScene(Scene):
             feature = dict_merge(item, _COLLECTIONS[feature['platformName']])
         super(GBDXScene, self).__init__(feature)
 
+    #def utm_epsg(self, latlon):
+    #    """ Get UTM zone for this scene """
+    #    zone = utm.from_latlon(latlon[0], latlon[1])
+    #    return ('EPSG:327' if latlon[0] < 0 else 'EPSG:326') + str(zone[2])
+
+    def order(self):
+        """ Order this scene """
+        if 'dg:order_id' not in self.keys():
+            self.feature['properties']['dg:order_id'] = gbdx.ordering.order(self['id'])
+        sid = self.feature['properties']['dg:order_id']
+        status = gbdx.ordering.status(sid)[0]
+        print('%s (Order %s): %s' % (status['acquisition_id'], sid, status['state']))
+        return False if status['location'] == 'not_delivered' else True
 
     def download(self, key, **kwargs):
         """ Download this key from scene assets """
+        if key != 'thumbnail':
+            logger.warn('Downloading non-thumbnail images not supported')
         fname = super().download(key, **kwargs)
-        if key == 'thumbnail' and fname is not None:
+        if fname is not None:
             geoimg = gippy.GeoImage(fname)
             bname, ext = os.path.splitext(fname)
             wldfile = bname + '.wld'
@@ -104,7 +121,61 @@ class GBDXScene(Scene):
             #os.remove(fname)
             #os.remove(wldfile)
             #fname = geoimg.filename()
-            return fname
+        return fname
+
+    def fetch(self, key, aoi, pansharpen=False, acomp=False, dra=False, **kwargs):
+        if self.order():
+            # create tempfile for AOI
+            with tempfile.NamedTemporaryFile(suffix='.geojson', mode='w', delete=False) as f:
+                aoiname = f.name
+                aoistr = json.dumps(aoi)
+                f.write(aoistr)
+            geovec = gippy.GeoVector(aoiname)
+            ext = geovec.extent()
+            bbox = [ext.x0(), ext.y0(), ext.x1(), ext.y1()]
+
+            # determine name
+            #dt = dateparser(scene.metadata['timestamp'])
+            #bname = '%s_%s' % (dt.strftime('%Y-%m-%d_%H-%M-%S'), scene.metadata['satellite_name'])
+            # defaults
+            spec = ''
+            pansharpen = False
+            acomp = False
+            dra = False
+            nodata = 0 if self['eo:platform'] in ['GEOEYE01', 'QUICKBIRD02'] else -1e10
+
+            # set options
+            if key == 'rgb':
+                pansharpen = True
+                spec = 'rgb'
+                nodata = 0
+            elif key == 'visual':
+                pansharpen = True
+                dra = True
+                nodata = 0
+            elif key == 'analytic':
+                acomp = True
+
+            fout = os.path.join(os.getcwd(), self.get_filename(suffix='_%s' % key)) + '.tif'
+
+            with TemporaryDirectory() as temp_dir:
+                try:
+                    # TODO - allow for other projections
+                    img = CatalogImage(self['id'], pansharpen=pansharpen, acomp=acomp, dra=dra, bbox=bbox) #, proj=utm_epsg(scenes.center()))
+                    if not os.path.exists(fout):
+                        tif = img.geotiff(path=os.path.join(temp_dir, '%s.tif' % key), proj='EPSG:4326', spec=spec)
+                        # clip and save
+                        geoimg = gippy.GeoImage(tif, True)
+                        geoimg.set_nodata(nodata)
+                        # this clips the image to the AOI
+                        res = geoimg.resolution()
+                        imgout = alg.cookie_cutter([geoimg], fout, geovec[0], xres=res.x(), yres=res.y(), proj=geoimg.srs(), options=COG_OPTS)
+                        imgout = None
+                except Exception as e:
+                    print(e)
+
+            os.remove(aoiname)
+            return fout
 
 
 class GBDXScenes(Scenes):
@@ -116,6 +187,14 @@ class GBDXScenes(Scenes):
             geoj = json.loads(f.read())
         scenes = [GBDXScene(feature) for feature in geoj['features']]
         return cls(scenes, properties=geoj.get('properties', {}))
+
+    def fetch(self, key, **kwargs):
+        dls = []
+        for s in self.scenes:
+            fname = s.fetch(key, aoi=self.properties['intersects'], **kwargs)
+            if fname is not None:
+                dls.append(fname)
+        return dls
 
 
 def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
@@ -150,8 +229,6 @@ def query(types=['DigitalGlobeAcquisition'], overlap=None, **kwargs):
                 filters.append("cloudCover <= %s" % cc[0])
         results = gbdx.catalog.search(filters=filters, types=types, **kwargs)
 
-    #with open('results.json', 'w') as f:
-    #    f.write(json.dumps(results))
     scenes = [GBDXScene(r['properties']) for r in results]
 
     # calculate overlap
@@ -170,62 +247,3 @@ def calculate_overlap(scenes, geometry):
         geom = shape(s.geometry)
         s.feature['properties']['overlap'] = int(geom.intersection(geom0).area / geom0.area * 100)
     return scenes
-
-
-def utm_epsg(latlon):
-    zone = utm.from_latlon(latlon[0], latlon[1])
-    return ('EPSG:327' if latlon[0] < 0 else 'EPSG:326') + str(zone[2])
-
-
-def order(scene):
-    """ Order this scene """
-    if 'dg:order_id' not in scene.keys():
-        scene.feature['properties']['dg:order_id'] = gbdx.ordering.order(scene['id'])
-    sid = scene.feature['properties']['dg:order_id']
-    status = gbdx.ordering.status(sid)[0]
-    print('%s (Order %s): %s' % (status['acquisition_id'], sid, status['state']))
-    return False if status['location'] == 'not_delivered' else True
-
-
-def download_scenes(scenes, spec='', pansharpen=False, acomp=False, dra=False):
-    """ Download these scenes """
-    with tempfile.NamedTemporaryFile(suffix='.geojson', mode='w', delete=False) as f:
-        aoiname = f.name
-        aoistr = json.dumps(scenes.properties['intersects'])
-        f.write(aoistr)
-    geovec = gippy.GeoVector(aoiname)
-    fouts = []
-    dirout = tempfile.mkdtemp()
-    # TODO - wrap this in a try-except-finally to ensure removal of files
-    for scene in scenes:
-        fulfilled = order(scene)
-        if fulfilled:
-            #dt = dateparser(scene.metadata['timestamp'])
-            #bname = '%s_%s' % (dt.strftime('%Y-%m-%d_%H-%M-%S'), scene.metadata['satellite_name'])
-            suffix = '_pansharp' if pansharpen else ''
-            if spec == 'rgb':
-                suffix += '_rgb'
-            fout = os.path.join(os.getcwd(), scene.get_filename(suffix=suffix)) + '.tif'
-            try:
-                # TODO - allow for other projections
-                img = CatalogImage(scene['id'], pansharpen=pansharpen, acomp=acomp, dra=dra,
-                                   bbox=scenes.bbox()) #, proj=utm_epsg(scenes.center()))
-                if not os.path.exists(fout):
-                    tif = img.geotiff(path=fout, proj='EPSG:4326', spec=spec)
-                    geoimg = gippy.GeoImage(tif, True)
-                    if scene['eo:platform'] == 'GEOEYE01' or scene['eo:platform'] == 'QUICKBIRD02':
-                        geoimg.set_nodata(0)
-                    else:
-                        geoimg.set_nodata(-1e10)
-                    # this clips the image to the AOI
-                    res = geoimg.resolution()
-                    fout2 = os.path.join(dirout, os.path.basename(fout))
-                    imgout = alg.cookie_cutter([geoimg], fout2, geovec[0], xres=res.x(), yres=res.y(), proj=geoimg.srs(), options=COG_OPTS)
-                    imgout = None
-                    os.remove(fout)
-                    shutil.move(fout2, fout)
-                fouts.append(fout)
-            except Exception as e:
-                print(e)
-    os.remove(aoiname)
-    return fouts
