@@ -139,9 +139,6 @@ class GBDXScene(Scene):
             ext = geovec.extent()
             bbox = [ext.x0(), ext.y0(), ext.x1(), ext.y1()]
 
-            # determine name
-            #dt = dateparser(scene.metadata['timestamp'])
-            #bname = '%s_%s' % (dt.strftime('%Y-%m-%d_%H-%M-%S'), scene.metadata['satellite_name'])
             # defaults
             spec = ''
             pansharpen = False
@@ -152,10 +149,13 @@ class GBDXScene(Scene):
 
             # set options
             if key == 'rgb':
-                pansharpen = True
                 spec = 'rgb'
                 nodata = 0
                 #opts = JPEG_COG
+            elif key == 'rgb-pan':
+                pansharpen = True
+                spec = 'rgb'
+                nodata = 0
             elif key == 'visual':
                 pansharpen = True
                 dra = True
