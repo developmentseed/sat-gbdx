@@ -8,6 +8,7 @@ import geojson as geoj
 import math
 import shapely.wkt
 import tempfile
+import traceback
 from tempfile import TemporaryDirectory
 
 import json
@@ -40,8 +41,11 @@ def load_collections():
 COLLECTIONS = load_collections()
 _COLLECTIONS = {c['properties']['eo:instrument']:c for c in COLLECTIONS.values()}
 
-COG_OPTS = {'COMPRESS': 'DEFLATE', 'PREDICTOR': '2', 'INTERLEAVE': 'BAND',
-        'TILED': 'YES', 'BLOCKXSIZE': '512', 'BLOCKYSIZE': '512'}
+COG = {'COMPRESS': 'DEFLATE', 'PREDICTOR': '2', 'INTERLEAVE': 'BAND',
+        'TILED': 'YES', 'BLOCKXSIZE': '256', 'BLOCKYSIZE': '256'}
+
+JPEG_COG = {'COMPRESS': 'JPEG', 'PHOTOMETRIC': 'YCBCR',
+        'TILED': 'YES', 'BLOCKXSIZE': '256', 'BLOCKYSIZE': '256'}
 
 
 class GBDXScene(Scene):
@@ -85,7 +89,7 @@ class GBDXScene(Scene):
         sid = self.feature['properties']['dg:order_id']
         status = gbdx.ordering.status(sid)[0]
         if status['location'] == 'not_delivered':
-            print('%s (Order %s): %s' % (status['acquisition_id'], sid, status['state']))
+            logger.info('%s (Order %s): %s' % (status['acquisition_id'], sid, status['state']))
         return False if status['location'] == 'not_delivered' else True
 
     def download(self, key, **kwargs):
@@ -144,16 +148,19 @@ class GBDXScene(Scene):
             acomp = False
             dra = False
             nodata = 0 if self['eo:platform'] in ['GEOEYE01', 'QUICKBIRD02'] else -1e10
+            opts = COG
 
             # set options
             if key == 'rgb':
                 pansharpen = True
                 spec = 'rgb'
                 nodata = 0
+                #opts = JPEG_COG
             elif key == 'visual':
                 pansharpen = True
                 dra = True
                 nodata = 0
+                #opts = JPEG_COG
             elif key == 'analytic':
                 acomp = True
 
@@ -161,19 +168,27 @@ class GBDXScene(Scene):
 
             with TemporaryDirectory() as temp_dir:
                 try:
-                    # TODO - allow for other projections
-                    img = CatalogImage(self['id'], pansharpen=pansharpen, acomp=acomp, dra=dra, bbox=bbox) #, proj=utm_epsg(scenes.center()))
                     if not os.path.exists(fout):
-                        tif = img.geotiff(path=os.path.join(temp_dir, '%s.tif' % key), proj='EPSG:4326', spec=spec)
+                        logger.info('Fetching %s: %s' % (key, fout))
+                        # TODO - allow for other projections
+                        img = CatalogImage(self['id'], pansharpen=pansharpen, acomp=acomp, dra=dra, bbox=bbox) #, proj=utm_epsg(scenes.center()))
+                        tmp_fout1 = os.path.join(temp_dir, '%s_%s_1.tif' % (self['id'], key))
+                        tmp_fout2 = os.path.join(temp_dir, '%s_%s_2.tif' % (self['id'], key))
+                        tif = img.geotiff(path=tmp_fout1, proj='EPSG:4326', spec=spec)
                         # clip and save
                         geoimg = gippy.GeoImage(tif, True)
-                        geoimg.set_nodata(nodata)
+                        # workaround for gbdxtools scaling
+                        if key in ['rgb', 'visual']:
+                            geoimg = geoimg.autoscale(1, 255).save(tmp_fout2)
+                        geoimg.set_nodata(0)
                         # this clips the image to the AOI
                         res = geoimg.resolution()
-                        imgout = alg.cookie_cutter([geoimg], fout, geovec[0], xres=res.x(), yres=res.y(), proj=geoimg.srs(), options=COG_OPTS)
+                        imgout = alg.cookie_cutter([geoimg], fout, geovec[0], xres=res.x(), yres=res.y(), proj=geoimg.srs(), options=opts)
+                        imgout.add_overviews([2,4,8,16], resampler='average')
                         imgout = None
                 except Exception as e:
-                    print(e)
+                    logger.warning('Error fetching: %s' % str(e))
+                    #logger.warning('Traceback: %s', traceback.format_exc())
 
             os.remove(aoiname)
             return fout
